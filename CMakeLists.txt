@@ -14,6 +14,7 @@ include_directories(
         "${CMAKE_CURRENT_SOURCE_DIR}/Renderer/include"
         "${THIRD_LIBRARY_DIR}/glfw/include"
         "${THIRD_LIBRARY_DIR}/glad/include"
+        "${THIRD_LIBRARY_DIR}/glm/include"
 )
 
 add_subdirectory ("Renderer")
