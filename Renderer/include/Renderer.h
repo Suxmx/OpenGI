@@ -15,3 +15,8 @@
 #include "obj_loader.h"
 #include "shader.h"
 #include "vertex.h"
+
+//imgui
+#include "imgui.h"
+#include "backend/imgui_impl_glfw.h"
+#include <backend/imgui_impl_opengl3.h>

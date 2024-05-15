@@ -15,6 +15,7 @@ include_directories(
         "${THIRD_LIBRARY_DIR}/glfw/include"
         "${THIRD_LIBRARY_DIR}/glad/include"
         "${THIRD_LIBRARY_DIR}/glm/include"
+        "${THIRD_LIBRARY_DIR}/imgui"
 )
 
 add_subdirectory ("Renderer")

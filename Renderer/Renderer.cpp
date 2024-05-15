@@ -3,16 +3,56 @@
 using namespace glm;
 using namespace std;
 
-const int screenWidth = 800, screenHeight = 600;
+const int screenWidth = 1920, screenHeight = 1080;
 
-void framebufferSizeCallback(GLFWwindow *window, int width, int height)
-{
-    glViewport(0, 0, width, height);
-}
 
 vector<string> models;
 unsigned int VAO, currentModel = 0;
+GLuint framebuffer, textureColorbuffer, depthBuffer;
+mat4 model = mat4(1), view = mat4(1), proj = mat4(1), mvp;
+bool setFrameBuffer = false;
 
+void SetupFramebuffer(int framebufferWidth, int framebufferHeight)
+{
+    setFrameBuffer = true;
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
+    {
+        // 删除纹理附件
+        glDeleteTextures(1, &textureColorbuffer);
+
+        // 删除深度缓冲区
+        glDeleteRenderbuffers(1, &depthBuffer);
+
+        // 删除帧缓冲对象
+        glDeleteFramebuffers(1, &framebuffer);
+    }
+
+    // 创建帧缓冲对象
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    // 创建颜色附件纹理
+    glGenTextures(1, &textureColorbuffer);
+    glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, framebufferWidth, framebufferHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+    glGenRenderbuffers(1, &depthBuffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, depthBuffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, framebufferWidth, framebufferHeight);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthBuffer);
+    // 检查帧缓冲完整性
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "Framebuffer is not complete!" << std::endl;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void framebufferSizeCallback(GLFWwindow *window, int width, int height)
+{
+//    SetupFramebuffer(width,height);
+}
 
 GLFWwindow *initAll()
 {
@@ -36,9 +76,23 @@ GLFWwindow *initAll()
         return nullptr;
     }
     //Init opengl
-    glViewport(0, 0, 800, 600);
+    glViewport(0, 0, screenHeight, screenHeight);
     glEnable(GL_DEPTH_TEST);
     glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+    //Init imgui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO &io = ImGui::GetIO();
+    (void) io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableSetMousePos;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;           // Enable Docking
+//    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;         // Enable Multi-Viewport / Platform Windows
+
+    ImGui::StyleColorsDark();
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init();
+
     return window;
 }
 
@@ -162,6 +216,98 @@ void processInput(GLFWwindow *window, vector<Mesh> &meshes)
     }
 }
 
+ImVec2 gl_viewport_size;
+ImVec2 gl_viewport_content_pos;
+
+bool checkViewportChange(ImVec2 viewportSize)
+{
+    return ((int) viewportSize.x != (int) gl_viewport_size.x || ((int) viewportSize.y != (int) gl_viewport_size.y));
+}
+
+void drawImgui()
+{
+
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+    // 创建主窗口
+    ImGui::SetNextWindowPos(ImVec2(0, 0));
+    ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
+    ImGui::Begin("Main Window", nullptr,
+                 ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+                 ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoTitleBar);
+    if (ImGui::BeginMenuBar())
+    {
+        if (ImGui::BeginMenu("File"))
+        {
+            ImGui::MenuItem("Open", "Ctrl+O");
+            ImGui::MenuItem("Save", "Ctrl+S");
+            ImGui::MenuItem("Close", "Ctrl+W");
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenuBar();
+    }
+    // 创建DockSpace
+    ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+    // opengl window
+
+    ImGui::SetNextWindowDockID(dockspace_id, ImGuiCond_FirstUseEver);
+    ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+    ImGui::Begin("OpenGL Viewport", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
+    ImVec2 viewport_pos = ImGui::GetWindowPos();
+    ImVec2 content_min = ImGui::GetWindowContentRegionMin();
+    ImVec2 content_max = ImGui::GetWindowContentRegionMax();
+
+    auto new_gl_viewport_size = ImVec2(content_max.x - content_min.x, content_max.y - content_min.y);
+    auto new_gl_viewport_content_pos = ImVec2(viewport_pos.x + content_min.x, viewport_pos.y + content_min.y);
+    if (checkViewportChange(new_gl_viewport_size))
+    {
+        SetupFramebuffer((int) new_gl_viewport_size.x, (int) new_gl_viewport_size.y);
+        gl_viewport_size = new_gl_viewport_size;
+        gl_viewport_content_pos = new_gl_viewport_content_pos;
+        proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f,gl_viewport_size.y), 0.1f, 1500.0f);
+        mvp = proj * view * model;
+    }
+    ImGui::Image((void *) (intptr_t) textureColorbuffer, new_gl_viewport_size, ImVec2(0, 1), ImVec2(1, 0));
+
+    //opengl window end
+    ImGui::End();
+    ImGui::PopStyleColor(); // 恢复默认窗口背景色
+    // 渲染OpenGL内容
+
+    // main window
+    ImGui::End();
+    ImGui::SetNextWindowDockID(dockspace_id, ImGuiCond_FirstUseEver);
+    ImGui::Begin("Test1");
+    ImGui::End();
+
+
+    // 渲染ImGui
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+
+void drawOpengl(ImVec2 position, ImVec2 size, vector<Mesh> &meshes, shader myShader)
+{
+    glViewport(0, 0, (int) size.x, (int) size.y);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+    glClearColor(0.f, 0.f, 0.f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    for (const auto &mesh: meshes)
+    {
+        glBindVertexArray(mesh.VAO);
+        //Set uniforms
+        material_t m = mesh.material;
+        myShader.setVec3("material.ambient", m.ambient[0], m.ambient[1], m.ambient[2]);
+        myShader.setVec3("material.diffuse", m.diffuse[0], m.diffuse[1], m.diffuse[2]);
+        myShader.setVec3("material.specular", m.specular[0], m.specular[1], m.specular[2]);
+
+        glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 int main()
 {
     GLFWwindow *window = initAll();
@@ -179,14 +325,13 @@ int main()
     // use shader
     myShader.use();
     // init mvp matrix
-    mat4 model = mat4(1), view = mat4(1), proj = mat4(1);
+
     vec3 cameraPos = glm::vec3(278.0f, 273.0f, -660.0f);
     vec3 cameraTarget = glm::vec3(278.0f, 273.0f, 279.0f);
     vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
     view = lookAt(cameraPos, cameraTarget, up);
-    proj = perspective(radians(45.0f), (float) screenWidth / (float) screenHeight, 0.1f, 1500.0f);
-    // mvp matrix
-    mat4 mvp = proj * view * model;
+
+    proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f,gl_viewport_size.y), 0.1f, 1500.0f);
     // normal transform matrix
     mat3 normal_mv = transpose(inverse(view * model));
     // light pos
@@ -194,29 +339,22 @@ int main()
     vs_lightPos = vs_lightPos / vs_lightPos.w;
     // set uniforms
     myShader.setVec3("viewspace_lightPos", vs_lightPos.x, vs_lightPos.y, vs_lightPos.z);
-    myShader.setMat4("mvp", mvp);
+
     myShader.setMat4("mv", view * model);
     myShader.setMat3("normal_mv", normal_mv);
-
+    mvp = proj * view * model;
     //Render Loop
     while (!glfwWindowShouldClose(window))
     {
-        processInput(window, meshes);
-        //Render Command
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        for (const auto &mesh: meshes)
-        {
-            glBindVertexArray(mesh.VAO);
-            //Set uniforms
-            material_t m = mesh.material;
-            myShader.setVec3("material.ambient", m.ambient[0], m.ambient[1], m.ambient[2]);
-            myShader.setVec3("material.diffuse", m.diffuse[0], m.diffuse[1], m.diffuse[2]);
-            myShader.setVec3("material.specular", m.specular[0], m.specular[1], m.specular[2]);
+        processInput(window, meshes);
 
-            glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
-        }
+        myShader.setMat4("mvp", mvp);
+        //Render Command
 
+        drawOpengl(gl_viewport_content_pos, gl_viewport_size, meshes, myShader);
+        drawImgui();
 
         //Render Command End
         glfwPollEvents();
@@ -225,5 +363,3 @@ int main()
     glfwTerminate();
     return 0;
 }
-
-#pragma clang diagnostic pop
