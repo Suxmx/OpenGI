@@ -14,7 +14,8 @@
 //custom
 #include "obj_loader.h"
 #include "shader.h"
-#include "vertex.h"
+#include "render_data.h"
+#include "renderpass.h"
 
 //imgui
 #include "imgui.h"
