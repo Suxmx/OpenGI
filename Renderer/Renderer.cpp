@@ -288,23 +288,15 @@ void drawImgui()
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void drawOpengl(ImVec2 position, ImVec2 size, vector<Mesh> &meshes, shader myShader)
+void drawOpengl( ImVec2 size,  shader myShader)
 {
     glViewport(0, 0, (int) size.x, (int) size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
     glClearColor(0.f, 0.f, 0.f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    for (const auto &mesh: meshes)
-    {
-        glBindVertexArray(mesh.VAO);
-        //Set uniforms
-        material_t m = mesh.material;
-        myShader.setVec3("material.ambient", m.ambient[0], m.ambient[1], m.ambient[2]);
-        myShader.setVec3("material.diffuse", m.diffuse[0], m.diffuse[1], m.diffuse[2]);
-        myShader.setVec3("material.specular", m.specular[0], m.specular[1], m.specular[2]);
 
-        glDrawElements(GL_TRIANGLES, mesh.indices.size(), GL_UNSIGNED_INT, 0);
-    }
+
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
@@ -316,12 +308,12 @@ int main()
         return -1;
     }
     shader myShader("Shaders/blinn-phong_vert.glsl", "Shaders/blinn-phong_frag.glsl");
-    vector<Mesh> meshes;
+
     // load objs
     models.push_back("Models/cornell_box.obj");
     models.push_back("Models/helmet.obj");
     models.push_back("Models/sword2.obj");
-    loadObj(models[0].c_str(), meshes);
+
     // use shader
     myShader.use();
     // init mvp matrix
@@ -348,12 +340,11 @@ int main()
     {
         glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        processInput(window, meshes);
 
         myShader.setMat4("mvp", mvp);
         //Render Command
 
-        drawOpengl(gl_viewport_content_pos, gl_viewport_size, meshes, myShader);
+        drawOpengl(gl_viewport_size, myShader);
         drawImgui();
 
         //Render Command End
