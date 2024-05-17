@@ -1,5 +1,6 @@
 #include "Renderer.h"
 
+
 using namespace glm;
 using namespace std;
 
@@ -54,6 +55,10 @@ void framebufferSizeCallback(GLFWwindow *window, int width, int height)
 //    SetupFramebuffer(width,height);
 }
 
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
+
+void mouse_callback(GLFWwindow *window, double xpos, double ypos);
+
 GLFWwindow *initAll()
 {
     //Init Window
@@ -69,6 +74,9 @@ GLFWwindow *initAll()
         return nullptr;
     }
     glfwMakeContextCurrent(window);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     //Init Glad
     if (!gladLoadGLLoader((GLADloadproc) glfwGetProcAddress))
     {
@@ -107,23 +115,22 @@ vec3 calculateNormal(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &
     return normal;
 }
 
-void loadObj(const char *filename, vector<Mesh> &meshes)
+void loadObj(const char *filename, vector<Batch> &meshes)
 {
     vector<Vertex> vertices;
     meshes.clear();
     curModel = Model(filename, "Models/");
     curModel.Load(nullptr, nullptr);
+    tinyobj::ObjReader rd;
+    rd.ParseFromFile(filename);
+    map<int, Batch> batches;
     for (const auto &shape: curModel.shapes)
     {
-        Mesh mesh{};
         bool needCalcNormal = false;
-        if (!shape.mesh.material_ids.empty())
-        {
-            if (shape.mesh.material_ids[0] >= 0)
-                mesh.material = curModel.materials[shape.mesh.material_ids[0]];
-        }
+        int numIndex = 0;
         for (const auto &index: shape.mesh.indices)
         {
+            int numFace = numIndex++ / 3;
             Vertex v{};
             // pos
             vec3 v1, v2, v3;
@@ -137,15 +144,27 @@ void loadObj(const char *filename, vector<Mesh> &meshes)
                 v.normal[1] = curModel.vertexAttribute.normals[3 * index.normal_index + 1];
                 v.normal[2] = curModel.vertexAttribute.normals[3 * index.normal_index + 2];
             }
+            else needCalcNormal = true;
             // uv
             if (index.texcoord_index >= 0)
             {
                 v.texcoord[0] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index];
                 v.texcoord[1] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index + 1];
             }
-            else needCalcNormal = true;
-            mesh.indices.push_back(mesh.indices.size());
-            vertices.push_back(v);
+
+
+            int materialId = numFace < shape.mesh.material_ids.size() ? shape.mesh.material_ids[numFace] : -1;
+            if (!batches.contains(materialId))
+            {
+                Batch b{};
+                b.materialId = materialId;
+                if (materialId >= 0)
+                    b.material = curModel.materials[materialId];
+                batches[materialId] = b;
+            }
+
+            batches[materialId].indices.push_back(batches[materialId].v.size());
+            batches[materialId].v.push_back(v);
         }
         //若无法向量则重新计算
         if (needCalcNormal)
@@ -160,7 +179,10 @@ void loadObj(const char *filename, vector<Mesh> &meshes)
                 vertices[i].normal = vertices[i + 1].normal = vertices[i + 2].normal = calculateNormal(v1, v2, v3);
             }
         }
-
+    }
+    //Bind
+    for (auto &batch: batches)
+    {
         unsigned int VBOid, VAOid, EBOid;
         glGenVertexArrays(1, &VAOid);
         glBindVertexArray(VAOid);
@@ -168,7 +190,7 @@ void loadObj(const char *filename, vector<Mesh> &meshes)
         glGenBuffers(1, &VBOid);
         glBindBuffer(GL_ARRAY_BUFFER, VBOid);
         //vertices
-        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
+        glBufferData(GL_ARRAY_BUFFER, batch.second.v.size() * sizeof(Vertex), batch.second.v.data(), GL_STATIC_DRAW);
         //position
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, position));
         //normal
@@ -180,23 +202,88 @@ void loadObj(const char *filename, vector<Mesh> &meshes)
         glEnableVertexAttribArray(2);
         glGenBuffers(1, &EBOid);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOid);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(int), mesh.indices.data(), GL_STATIC_DRAW);
-
-        mesh.VAO = VAOid;
-        meshes.push_back(mesh);
-        vertices.clear();
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, batch.second.indices.size() * sizeof(int), batch.second.indices.data(),
+                     GL_STATIC_DRAW);
+        batch.second.VAO = VAOid;
+        meshes.push_back(batch.second);
     }
+
 
 }
 
 
 typedef pair<int, bool> KeyPair;
+vec3 cameraPos = glm::vec3(-0.5f, 0.f, 0.f);
+vec3 cameraTarget = glm::vec3(0, 0, -0);
 
-void processInput(GLFWwindow *window, vector<Mesh> &meshes)
+
+float yaww = -90.0f; // 初始值指向负Z方向
+float pitchh = 0.0f;
+float lastX = 400, lastY = 300; // 初始鼠标位置
+bool firstMouse = true;
+bool dragging = false;
+vec3 cameraUp = glm::vec3(0.0f, 1.0f, 0.0f);
+vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
+vec3 cameraRight = glm::normalize(glm::cross(cameraFront, cameraUp));
+
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
+{
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        dragging = true;
+        firstMouse = true; // 初始化鼠标位置
+    }
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE)
+    {
+        dragging = false;
+    }
+}
+
+void mouse_callback(GLFWwindow *window, double xpos, double ypos)
+{
+    if (!dragging) return;
+
+    if (firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // 注意这里是相反的，因为y坐标是从底部往顶部数的
+    lastX = xpos;
+    lastY = ypos;
+
+    float sensitivity = 0.1f;
+    xoffset *= sensitivity;
+    yoffset *= sensitivity;
+
+    yaww += xoffset;
+    pitchh += yoffset;
+
+    // 限制俯仰角度，避免翻转
+    if (pitchh > 89.0f)
+        pitchh = 89.0f;
+    if (pitchh < -89.0f)
+        pitchh = -89.0f;
+
+    // 计算前向量
+    glm::vec3 front;
+    front.x = cos(glm::radians(yaww)) * cos(glm::radians(pitchh));
+    front.y = sin(glm::radians(pitchh));
+    front.z = sin(glm::radians(yaww)) * cos(glm::radians(pitchh));
+    cameraFront = glm::normalize(front);
+    cameraRight = glm::normalize(glm::cross(cameraFront, cameraUp));
+}
+
+void processInput(GLFWwindow *window, vector<Batch> &meshes)
 {
     static map<int, bool> keyStayMap{KeyPair(GLFW_KEY_ESCAPE, false), KeyPair(GLFW_KEY_ENTER, false)};
     map<int, bool> keyDownMap;
     map<int, bool> keyUpMap;
+    static float lastT = 0;
     for (auto &p: keyStayMap)
     {
         int state = glfwGetKey(window, p.first);
@@ -214,6 +301,40 @@ void processInput(GLFWwindow *window, vector<Mesh> &meshes)
         currentModel = currentModel + 1 >= models.size() ? 0 : currentModel + 1;
         loadObj(models[currentModel].c_str(), meshes);
     }
+
+
+    float speed = 0.8f;
+    if (keyStayMap[GLFW_KEY_W])
+    {
+        cameraPos += cameraFront * speed * ((float) glfwGetTime() - lastT);
+    }
+    if (keyStayMap[GLFW_KEY_S])
+    {
+        cameraPos -= cameraFront * speed * ((float) glfwGetTime() - lastT);
+    }
+    if (keyStayMap[GLFW_KEY_A])
+    {
+        cameraPos -= cameraRight * speed * ((float) glfwGetTime() - lastT);
+    }
+
+    if (keyStayMap[GLFW_KEY_D])
+    {
+        cameraPos += cameraRight * speed * ((float) glfwGetTime() - lastT);
+    }
+    if (keyStayMap[GLFW_KEY_E])
+    {
+        cameraPos += cameraUp * speed * ((float) glfwGetTime() - lastT);
+    }
+
+    if (keyStayMap[GLFW_KEY_Q])
+    {
+        cameraPos -= cameraUp * speed * ((float) glfwGetTime() - lastT);
+    }
+
+    cameraTarget = cameraPos + cameraFront * 0.3f;
+    view = lookAt(cameraPos, cameraTarget, cameraUp);
+    lastT = glfwGetTime();
+    mvp = proj * view * model;
 }
 
 ImVec2 gl_viewport_size;
@@ -266,7 +387,7 @@ void drawImgui()
         SetupFramebuffer((int) new_gl_viewport_size.x, (int) new_gl_viewport_size.y);
         gl_viewport_size = new_gl_viewport_size;
         gl_viewport_content_pos = new_gl_viewport_content_pos;
-        proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f,gl_viewport_size.y), 0.1f, 1500.0f);
+        proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f, gl_viewport_size.y), 0.1f, 1500.0f);
         mvp = proj * view * model;
     }
     ImGui::Image((void *) (intptr_t) textureColorbuffer, new_gl_viewport_size, ImVec2(0, 1), ImVec2(1, 0));
@@ -288,7 +409,7 @@ void drawImgui()
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void drawOpengl(ImVec2 position, ImVec2 size, vector<Mesh> &meshes, shader myShader)
+void drawOpengl(ImVec2 position, ImVec2 size, vector<Batch> &meshes, shader myShader)
 {
     glViewport(0, 0, (int) size.x, (int) size.y);
     glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
@@ -316,8 +437,9 @@ int main()
         return -1;
     }
     shader myShader("Shaders/blinn-phong_vert.glsl", "Shaders/blinn-phong_frag.glsl");
-    vector<Mesh> meshes;
+    vector<Batch> meshes;
     // load objs
+    models.push_back("Models/hm2.obj");
     models.push_back("Models/cornell_box.obj");
     models.push_back("Models/helmet.obj");
     models.push_back("Models/sword2.obj");
@@ -326,22 +448,22 @@ int main()
     myShader.use();
     // init mvp matrix
 
-    vec3 cameraPos = glm::vec3(278.0f, 273.0f, -660.0f);
-    vec3 cameraTarget = glm::vec3(278.0f, 273.0f, 279.0f);
-    vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-    view = lookAt(cameraPos, cameraTarget, up);
 
-    proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f,gl_viewport_size.y), 0.1f, 1500.0f);
+    vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+    cameraTarget = vec3(0, 0, 0);
+    view = lookAt(cameraPos, cameraTarget, up);
+    model = scale(model, vec3(1, 1, 1));
+//    view = mat4(1);
+    proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f, gl_viewport_size.y), 0.1f, 1500.0f);
     // normal transform matrix
     mat3 normal_mv = transpose(inverse(view * model));
     // light pos
-    vec4 vs_lightPos = view * model * vec4((343.0 + 213.0) / 2, 548, (227.0 + 332.0) / 2, 1);
+    vec4 vs_lightPos = view * vec4(0, 1.f, 0, 1);
     vs_lightPos = vs_lightPos / vs_lightPos.w;
     // set uniforms
     myShader.setVec3("viewspace_lightPos", vs_lightPos.x, vs_lightPos.y, vs_lightPos.z);
 
-    myShader.setMat4("mv", view * model);
-    myShader.setMat3("normal_mv", normal_mv);
+
     mvp = proj * view * model;
     //Render Loop
     while (!glfwWindowShouldClose(window))
@@ -349,7 +471,13 @@ int main()
         glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         processInput(window, meshes);
+        normal_mv = transpose(inverse(view * model));
+        vs_lightPos = view * vec4(0, 1.f, 0, 1);
+        vs_lightPos = vs_lightPos / vs_lightPos.w;
 
+        myShader.setVec3("viewspace_lightPos", vs_lightPos.x, vs_lightPos.y, vs_lightPos.z);
+        myShader.setMat4("mv", view * model);
+        myShader.setMat3("normal_mv", normal_mv);
         myShader.setMat4("mvp", mvp);
         //Render Command
 

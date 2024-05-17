@@ -2,6 +2,7 @@
 
 #include <glm/glm.hpp>
 #include "obj_loader.h"
+#include "tinyobjloader.h"
 
 struct Vertex
 {
@@ -17,10 +18,14 @@ struct Vertex
     }
 };
 
-struct Mesh
+
+
+struct Batch
 {
+    int materialId;
     unsigned int VAO;
     std::vector<unsigned int> indices;
+    std::vector<Vertex> v;
     material_t material;
 };
 

@@ -20,7 +20,8 @@ void main() {
 
     vec3 specular = lightColor * pow(max(0, dot(half_vec, viewspace_normal)), 32);
 
-    color = vec4(ambient + diffuse + specular , 1);
+//    color = vec4(ambient + diffuse + specular , 1);
+    color=vec4(material.diffuse,1);
 }
 
 

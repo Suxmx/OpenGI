@@ -15,6 +15,8 @@
 #include "obj_loader.h"
 #include "shader.h"
 #include "vertex.h"
+#define TINYOBJLOADER_IMPLEMENTATION
+#include "tinyobjloader.h"
 
 //imgui
 #include "imgui.h"
