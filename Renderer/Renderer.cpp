@@ -8,13 +8,25 @@ const int screenWidth = 1920, screenHeight = 1080;
 
 vector<string> models;
 unsigned int VAO, currentModel = 0;
-GLuint framebuffer, textureColorbuffer, depthBuffer;
+GLuint framebuffer, textureColorbuffer, depthBuffer, imguiViewportTexture;
 mat4 model = mat4(1), view = mat4(1), proj = mat4(1), mvp;
-bool setFrameBuffer = false;
+RenderPass renderPass;
+
+GLuint getTextureRGB32F(int width, int height)
+{
+    GLuint tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    return tex;
+}
 
 void SetupFramebuffer(int framebufferWidth, int framebufferHeight)
 {
-    setFrameBuffer = true;
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE)
     {
         // 删除纹理附件
@@ -107,92 +119,92 @@ vec3 calculateNormal(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &
     return normal;
 }
 
-void loadObj(const char *filename, vector<Mesh> &meshes)
-{
-    vector<Vertex> vertices;
-    meshes.clear();
-    curModel = Model(filename, "Models/");
-    curModel.Load(nullptr, nullptr);
-    for (const auto &shape: curModel.shapes)
-    {
-        Mesh mesh{};
-        bool needCalcNormal = false;
-        if (!shape.mesh.material_ids.empty())
-        {
-            if (shape.mesh.material_ids[0] >= 0)
-                mesh.material = curModel.materials[shape.mesh.material_ids[0]];
-        }
-        for (const auto &index: shape.mesh.indices)
-        {
-            Vertex v{};
-            // pos
-            vec3 v1, v2, v3;
-            v.position[0] = curModel.vertexAttribute.vertices[3 * index.vertex_index];
-            v.position[1] = curModel.vertexAttribute.vertices[3 * index.vertex_index + 1];
-            v.position[2] = curModel.vertexAttribute.vertices[3 * index.vertex_index + 2];
-            // normal
-            if (index.normal_index >= 0)
-            {
-                v.normal[0] = curModel.vertexAttribute.normals[3 * index.normal_index];
-                v.normal[1] = curModel.vertexAttribute.normals[3 * index.normal_index + 1];
-                v.normal[2] = curModel.vertexAttribute.normals[3 * index.normal_index + 2];
-            }
-            // uv
-            if (index.texcoord_index >= 0)
-            {
-                v.texcoord[0] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index];
-                v.texcoord[1] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index + 1];
-            }
-            else needCalcNormal = true;
-            mesh.indices.push_back(mesh.indices.size());
-            vertices.push_back(v);
-        }
-        //若无法向量则重新计算
-        if (needCalcNormal)
-        {
-            for (int i = 0; i < vertices.size(); i += 3)
-            {
-                if (i + 2 >= vertices.size())break;
-                vec3 v1, v2, v3;
-                v1 = vertices[i].position;
-                v2 = vertices[i + 1].position;
-                v3 = vertices[i + 2].position;
-                vertices[i].normal = vertices[i + 1].normal = vertices[i + 2].normal = calculateNormal(v1, v2, v3);
-            }
-        }
-
-        unsigned int VBOid, VAOid, EBOid;
-        glGenVertexArrays(1, &VAOid);
-        glBindVertexArray(VAOid);
-        //VAOBegin
-        glGenBuffers(1, &VBOid);
-        glBindBuffer(GL_ARRAY_BUFFER, VBOid);
-        //vertices
-        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
-        //position
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, position));
-        //normal
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, normal));
-        //uv
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, texcoord));
-        glEnableVertexAttribArray(0);
-        glEnableVertexAttribArray(1);
-        glEnableVertexAttribArray(2);
-        glGenBuffers(1, &EBOid);
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOid);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(int), mesh.indices.data(), GL_STATIC_DRAW);
-
-        mesh.VAO = VAOid;
-        meshes.push_back(mesh);
-        vertices.clear();
-    }
-
-}
+//void loadObj(const char *filename, vector<Mesh> &meshes)
+//{
+//    vector<Vertex> vertices;
+//    meshes.clear();
+//    curModel = Model(filename, "Models/");
+//    curModel.Load(nullptr, nullptr);
+//    for (const auto &shape: curModel.shapes)
+//    {
+//        Mesh mesh{};
+//        bool needCalcNormal = false;
+//        if (!shape.mesh.material_ids.empty())
+//        {
+//            if (shape.mesh.material_ids[0] >= 0)
+//                mesh.material = curModel.materials[shape.mesh.material_ids[0]];
+//        }
+//        for (const auto &index: shape.mesh.indices)
+//        {
+//            Vertex v{};
+//            // pos
+//            vec3 v1, v2, v3;
+//            v.position[0] = curModel.vertexAttribute.vertices[3 * index.vertex_index];
+//            v.position[1] = curModel.vertexAttribute.vertices[3 * index.vertex_index + 1];
+//            v.position[2] = curModel.vertexAttribute.vertices[3 * index.vertex_index + 2];
+//            // normal
+//            if (index.normal_index >= 0)
+//            {
+//                v.normal[0] = curModel.vertexAttribute.normals[3 * index.normal_index];
+//                v.normal[1] = curModel.vertexAttribute.normals[3 * index.normal_index + 1];
+//                v.normal[2] = curModel.vertexAttribute.normals[3 * index.normal_index + 2];
+//            }
+//            // uv
+//            if (index.texcoord_index >= 0)
+//            {
+//                v.texcoord[0] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index];
+//                v.texcoord[1] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index + 1];
+//            }
+//            else needCalcNormal = true;
+//            mesh.indices.push_back(mesh.indices.size());
+//            vertices.push_back(v);
+//        }
+//        //若无法向量则重新计算
+//        if (needCalcNormal)
+//        {
+//            for (int i = 0; i < vertices.size(); i += 3)
+//            {
+//                if (i + 2 >= vertices.size())break;
+//                vec3 v1, v2, v3;
+//                v1 = vertices[i].position;
+//                v2 = vertices[i + 1].position;
+//                v3 = vertices[i + 2].position;
+//                vertices[i].normal = vertices[i + 1].normal = vertices[i + 2].normal = calculateNormal(v1, v2, v3);
+//            }
+//        }
+//
+//        unsigned int VBOid, VAOid, EBOid;
+//        glGenVertexArrays(1, &VAOid);
+//        glBindVertexArray(VAOid);
+//        //VAOBegin
+//        glGenBuffers(1, &VBOid);
+//        glBindBuffer(GL_ARRAY_BUFFER, VBOid);
+//        //vertices
+//        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
+//        //position
+//        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, position));
+//        //normal
+//        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, normal));
+//        //uv
+//        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, texcoord));
+//        glEnableVertexAttribArray(0);
+//        glEnableVertexAttribArray(1);
+//        glEnableVertexAttribArray(2);
+//        glGenBuffers(1, &EBOid);
+//        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOid);
+//        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(int), mesh.indices.data(), GL_STATIC_DRAW);
+//
+//        mesh.VAO = VAOid;
+//        meshes.push_back(mesh);
+//        vertices.clear();
+//    }
+//
+//}
 
 
 typedef pair<int, bool> KeyPair;
 
-void processInput(GLFWwindow *window, vector<Mesh> &meshes)
+void processInput(GLFWwindow *window)
 {
     static map<int, bool> keyStayMap{KeyPair(GLFW_KEY_ESCAPE, false), KeyPair(GLFW_KEY_ENTER, false)};
     map<int, bool> keyDownMap;
@@ -209,24 +221,20 @@ void processInput(GLFWwindow *window, vector<Mesh> &meshes)
     {
         glfwSetWindowShouldClose(window, true);
     }
-    if (keyDownMap[GLFW_KEY_ENTER])
-    {
-        currentModel = currentModel + 1 >= models.size() ? 0 : currentModel + 1;
-        loadObj(models[currentModel].c_str(), meshes);
-    }
 }
 
 ImVec2 gl_viewport_size;
-ImVec2 gl_viewport_content_pos;
 
 bool checkViewportChange(ImVec2 viewportSize)
 {
     return ((int) viewportSize.x != (int) gl_viewport_size.x || ((int) viewportSize.y != (int) gl_viewport_size.y));
 }
 
+bool firstFrame = true;
+
 void drawImgui()
 {
-
+    firstFrame = false;
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -255,21 +263,21 @@ void drawImgui()
     ImGui::SetNextWindowDockID(dockspace_id, ImGuiCond_FirstUseEver);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
     ImGui::Begin("OpenGL Viewport", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
-    ImVec2 viewport_pos = ImGui::GetWindowPos();
     ImVec2 content_min = ImGui::GetWindowContentRegionMin();
     ImVec2 content_max = ImGui::GetWindowContentRegionMax();
 
     auto new_gl_viewport_size = ImVec2(content_max.x - content_min.x, content_max.y - content_min.y);
-    auto new_gl_viewport_content_pos = ImVec2(viewport_pos.x + content_min.x, viewport_pos.y + content_min.y);
     if (checkViewportChange(new_gl_viewport_size))
     {
-        SetupFramebuffer((int) new_gl_viewport_size.x, (int) new_gl_viewport_size.y);
         gl_viewport_size = new_gl_viewport_size;
-        gl_viewport_content_pos = new_gl_viewport_content_pos;
-        proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f,gl_viewport_size.y), 0.1f, 1500.0f);
-        mvp = proj * view * model;
+
+        renderPass.width = (int) new_gl_viewport_size.x;
+        renderPass.height = (int) new_gl_viewport_size.y;
+        renderPass.colorAttachments.clear();
+        renderPass.colorAttachments.push_back(getTextureRGB32F(renderPass.width, renderPass.height));
+        renderPass.bindData();
     }
-    ImGui::Image((void *) (intptr_t) textureColorbuffer, new_gl_viewport_size, ImVec2(0, 1), ImVec2(1, 0));
+    ImGui::Image((void *) (intptr_t) renderPass.colorAttachments[0], new_gl_viewport_size, ImVec2(0, 1), ImVec2(1, 0));
 
     //opengl window end
     ImGui::End();
@@ -288,16 +296,11 @@ void drawImgui()
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-void drawOpengl( ImVec2 size,  shader myShader)
+void drawOpengl()
 {
-    glViewport(0, 0, (int) size.x, (int) size.y);
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-    glClearColor(0.f, 0.f, 0.f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    if (firstFrame)return;
 
-
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    renderPass.draw();
 }
 
 int main()
@@ -307,44 +310,17 @@ int main()
     {
         return -1;
     }
-    shader myShader("Shaders/blinn-phong_vert.glsl", "Shaders/blinn-phong_frag.glsl");
-
-    // load objs
-    models.push_back("Models/cornell_box.obj");
-    models.push_back("Models/helmet.obj");
-    models.push_back("Models/sword2.obj");
-
-    // use shader
-    myShader.use();
-    // init mvp matrix
-
-    vec3 cameraPos = glm::vec3(278.0f, 273.0f, -660.0f);
-    vec3 cameraTarget = glm::vec3(278.0f, 273.0f, 279.0f);
-    vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-    view = lookAt(cameraPos, cameraTarget, up);
-
-    proj = perspective(radians(45.0f), gl_viewport_size.x / std::max(0.1f,gl_viewport_size.y), 0.1f, 1500.0f);
-    // normal transform matrix
-    mat3 normal_mv = transpose(inverse(view * model));
-    // light pos
-    vec4 vs_lightPos = view * model * vec4((343.0 + 213.0) / 2, 548, (227.0 + 332.0) / 2, 1);
-    vs_lightPos = vs_lightPos / vs_lightPos.w;
-    // set uniforms
-    myShader.setVec3("viewspace_lightPos", vs_lightPos.x, vs_lightPos.y, vs_lightPos.z);
-
-    myShader.setMat4("mv", view * model);
-    myShader.setMat3("normal_mv", normal_mv);
-    mvp = proj * view * model;
+    shader testShader("./Shaders/tvert.glsl", "./Shaders/tfrag.glsl");
+    renderPass.program = testShader.ID;
     //Render Loop
     while (!glfwWindowShouldClose(window))
     {
         glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        myShader.setMat4("mvp", mvp);
         //Render Command
 
-        drawOpengl(gl_viewport_size, myShader);
+        drawOpengl();
         drawImgui();
 
         //Render Command End

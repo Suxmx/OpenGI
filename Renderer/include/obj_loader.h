@@ -16,6 +16,7 @@
 #include <sstream>
 #include <string>
 #include <cassert>
+
 class Model;
 
 bool LoadObj(const std::string &filename, Model *model, std::string *err, std::string *warn, bool colorFallback);
@@ -133,6 +134,7 @@ struct material_t
     std::map<std::string, std::string> unknown_parameter;
 
 };
+
 struct vertex_attribute_t
 {
     std::vector<float> vertices;
@@ -185,7 +187,6 @@ public:
     unsigned long long num_vertices{};
     unsigned int num_shapes{};
     unsigned int num_materials{};
-    unsigned int num_indices=0;
     // 顶点的基本属性
     vertex_attribute_t vertexAttribute;
     // shape和material
@@ -199,9 +200,10 @@ public:
     {
         return LoadObj(name, this, err, warn, true);
     }
+
     void Free()
     {
-        num_shapes=num_vertices=num_materials=0;
+        num_shapes = num_vertices = num_materials = 0;
         vertexAttribute.Free();
         shapes.clear();
         materials.clear();
@@ -1443,6 +1445,24 @@ bool LoadObj(const std::string &filename, Model *model, std::string *err, std::s
 
             continue;
         }
+        if (token[0] == 'g' && IS_SPACE(token[1]))
+        {
+            bool ret = exportGroupsToShape(&shape, primitiveGroup, name, v, material, warn);
+            (void) ret;
+            if (shape.mesh.indices.size() > 0)
+            {
+                shapes.push_back(shape);
+            }
+            shape = shape_t();
+
+            primitiveGroup.faces.clear();
+            token += 2;
+            std::stringstream ss;
+            ss << token;
+            name = ss.str();
+
+            continue;
+        }
         // 平滑着色组
         if (token[0] == 's' && IS_SPACE(token[1]))
         {
@@ -1592,6 +1612,21 @@ bool LoadObj(const std::string &filename, Model *model, std::string *err, std::s
     return true;
 }
 
+
+template<typename T>
+static int pnpoly(int nvert, T *vertx, T *verty, T testx, T testy)
+{
+    int i, j, c = 0;
+    for (i = 0, j = nvert - 1; i < nvert; j = i++)
+    {
+        if (((verty[i] > testy) != (verty[j] > testy)) &&
+            (testx <
+             (vertx[j] - vertx[i]) * (testy - verty[i]) / (verty[j] - verty[i]) +
+             vertx[i]))
+            c = !c;
+    }
+    return c;
+}
 static bool exportGroupsToShape(shape_t *shape, const primitive_group_t &primitiveGroup, const std::string &name,
                                 const std::vector<float> &v, const int materialId, std::string *warn)
 {
@@ -1704,7 +1739,7 @@ static bool exportGroupsToShape(shape_t *shape, const primitive_group_t &primiti
             shape->mesh.smoothingGroupId.push_back(face.smoothingGroupId);
             shape->mesh.smoothingGroupId.push_back(face.smoothingGroupId);
         }
-        else
+        else if (faceVertexNum == 3)
         {
             for (size_t k = 0; k < faceVertexNum; k++)
             {
@@ -1718,6 +1753,255 @@ static bool exportGroupsToShape(shape_t *shape, const primitive_group_t &primiti
             shape->mesh.material_ids.push_back(materialId);
             shape->mesh.smoothingGroupId.push_back(face.smoothingGroupId);
         }
+            //n边形
+        else
+        {
+            vertex_index_t i0 = face.vertexIndices[0];
+            vertex_index_t i1(-1);
+            vertex_index_t i2 = face.vertexIndices[1];
+
+            // find the two axes to work in
+            size_t axes[2] = {1, 2};
+            for (size_t k = 0; k < faceVertexNum; ++k)
+            {
+                i0 = face.vertexIndices[(k + 0) % faceVertexNum];
+                i1 = face.vertexIndices[(k + 1) % faceVertexNum];
+                i2 = face.vertexIndices[(k + 2) % faceVertexNum];
+                size_t vi0 = size_t(i0.vIndex);
+                size_t vi1 = size_t(i1.vIndex);
+                size_t vi2 = size_t(i2.vIndex);
+
+                if (((3 * vi0 + 2) >= v.size()) || ((3 * vi1 + 2) >= v.size()) ||
+                    ((3 * vi2 + 2) >= v.size()))
+                {
+                    // Invalid triangle.
+                    // FIXME(syoyo): Is it ok to simply skip this invalid triangle?
+                    continue;
+                }
+                float v0x = v[vi0 * 3 + 0];
+                float v0y = v[vi0 * 3 + 1];
+                float v0z = v[vi0 * 3 + 2];
+                float v1x = v[vi1 * 3 + 0];
+                float v1y = v[vi1 * 3 + 1];
+                float v1z = v[vi1 * 3 + 2];
+                float v2x = v[vi2 * 3 + 0];
+                float v2y = v[vi2 * 3 + 1];
+                float v2z = v[vi2 * 3 + 2];
+                float e0x = v1x - v0x;
+                float e0y = v1y - v0y;
+                float e0z = v1z - v0z;
+                float e1x = v2x - v1x;
+                float e1y = v2y - v1y;
+                float e1z = v2z - v1z;
+                float cx = std::fabs(e0y * e1z - e0z * e1y);
+                float cy = std::fabs(e0z * e1x - e0x * e1z);
+                float cz = std::fabs(e0x * e1y - e0y * e1x);
+                const float epsilon = std::numeric_limits<float>::epsilon();
+                // std::cout << "cx " << cx << ", cy " << cy << ", cz " << cz <<
+                // "\n";
+                if (cx > epsilon || cy > epsilon || cz > epsilon)
+                {
+                    // std::cout << "corner\n";
+                    // found a corner
+                    if (cx > cy && cx > cz)
+                    {
+                        // std::cout << "pattern0\n";
+                    }
+                    else
+                    {
+                        // std::cout << "axes[0] = 0\n";
+                        axes[0] = 0;
+                        if (cz > cx && cz > cy)
+                        {
+                            // std::cout << "axes[1] = 1\n";
+                            axes[1] = 1;
+                        }
+                    }
+                    break;
+                }
+            }
+
+            face_t remainingFace = face;  // copy
+            size_t guess_vert = 0;
+            vertex_index_t ind[3];
+            float vx[3];
+            float vy[3];
+
+            // How many iterations can we do without decreasing the remaining
+            // vertices.
+            size_t remainingIterations = face.vertexIndices.size();
+            size_t previousRemainingVertices =
+                    remainingFace.vertexIndices.size();
+
+            while (remainingFace.vertexIndices.size() > 3 &&
+                   remainingIterations > 0)
+            {
+                // std::cout << "remainingIterations " << remainingIterations <<
+                // "\n";
+
+                faceVertexNum = remainingFace.vertexIndices.size();
+                if (guess_vert >= faceVertexNum)
+                {
+                    guess_vert -= faceVertexNum;
+                }
+
+                if (previousRemainingVertices != faceVertexNum)
+                {
+                    // The number of remaining vertices decreased. Reset counters.
+                    previousRemainingVertices = faceVertexNum;
+                    remainingIterations = faceVertexNum;
+                }
+                else
+                {
+                    // We didn't consume a vertex on previous iteration, reduce the
+                    // available iterations.
+                    remainingIterations--;
+                }
+
+                for (size_t k = 0; k < 3; k++)
+                {
+                    ind[k] = remainingFace.vertexIndices[(guess_vert + k) % faceVertexNum];
+                    size_t vi = size_t(ind[k].vIndex);
+                    if (((vi * 3 + axes[0]) >= v.size()) ||
+                        ((vi * 3 + axes[1]) >= v.size()))
+                    {
+                        vx[k] = static_cast<float>(0.0);
+                        vy[k] = static_cast<float>(0.0);
+                    }
+                    else
+                    {
+                        vx[k] = v[vi * 3 + axes[0]];
+                        vy[k] = v[vi * 3 + axes[1]];
+                    }
+                }
+
+                //
+                // area is calculated per face
+                //
+                float e0x = vx[1] - vx[0];
+                float e0y = vy[1] - vy[0];
+                float e1x = vx[2] - vx[1];
+                float e1y = vy[2] - vy[1];
+                float cross = e0x * e1y - e0y * e1x;
+                // std::cout << "axes = " << axes[0] << ", " << axes[1] << "\n";
+                // std::cout << "e0x, e0y, e1x, e1y " << e0x << ", " << e0y << ", "
+                // << e1x << ", " << e1y << "\n";
+
+                float area =
+                        (vx[0] * vy[1] - vy[0] * vx[1]) * static_cast<float>(0.5);
+                // std::cout << "cross " << cross << ", area " << area << "\n";
+                // if an internal angle
+                if (cross * area < static_cast<float>(0.0))
+                {
+                    // std::cout << "internal \n";
+                    guess_vert += 1;
+                    // std::cout << "guess vert : " << guess_vert << "\n";
+                    continue;
+                }
+
+                // check all other verts in case they are inside this triangle
+                bool overlap = false;
+                for (size_t otherVert = 3; otherVert < faceVertexNum; ++otherVert)
+                {
+                    size_t idx = (guess_vert + otherVert) % faceVertexNum;
+
+                    if (idx >= remainingFace.vertexIndices.size())
+                    {
+                        // std::cout << "???0\n";
+                        // ???
+                        continue;
+                    }
+
+                    size_t ovi = size_t(remainingFace.vertexIndices[idx].vIndex);
+
+                    if (((ovi * 3 + axes[0]) >= v.size()) ||
+                        ((ovi * 3 + axes[1]) >= v.size()))
+                    {
+                        // std::cout << "???1\n";
+                        // ???
+                        continue;
+                    }
+                    float tx = v[ovi * 3 + axes[0]];
+                    float ty = v[ovi * 3 + axes[1]];
+                    if (pnpoly(3, vx, vy, tx, ty))
+                    {
+                        // std::cout << "overlap\n";
+                        overlap = true;
+                        break;
+                    }
+                }
+
+                if (overlap)
+                {
+                    // std::cout << "overlap2\n";
+                    guess_vert += 1;
+                    continue;
+                }
+
+                // this triangle is an ear
+                {
+                    index_t idx0, idx1, idx2;
+                    idx0.vertex_index = ind[0].vIndex;
+                    idx0.normal_index = ind[0].vnIndex;
+                    idx0.texcoord_index = ind[0].vtIndex;
+                    idx1.vertex_index = ind[1].vIndex;
+                    idx1.normal_index = ind[1].vnIndex;
+                    idx1.texcoord_index = ind[1].vtIndex;
+                    idx2.vertex_index = ind[2].vIndex;
+                    idx2.normal_index = ind[2].vnIndex;
+                    idx2.texcoord_index = ind[2].vtIndex;
+
+                    shape->mesh.indices.push_back(idx0);
+                    shape->mesh.indices.push_back(idx1);
+                    shape->mesh.indices.push_back(idx2);
+
+                    shape->mesh.num_face_vertices.push_back(3);
+                    shape->mesh.material_ids.push_back(materialId);
+                    shape->mesh.smoothingGroupId.push_back(
+                            face.smoothingGroupId);
+                }
+
+                // remove v1 from the list
+                size_t removed_vert_index = (guess_vert + 1) % faceVertexNum;
+                while (removed_vert_index + 1 < faceVertexNum)
+                {
+                    remainingFace.vertexIndices[removed_vert_index] =
+                            remainingFace.vertexIndices[removed_vert_index + 1];
+                    removed_vert_index += 1;
+                }
+                remainingFace.vertexIndices.pop_back();
+            }
+
+            // std::cout << "remainingFace.vi.size = " <<
+            // remainingFace.vertexIndices.size() << "\n";
+            if (remainingFace.vertexIndices.size() == 3)
+            {
+                i0 = remainingFace.vertexIndices[0];
+                i1 = remainingFace.vertexIndices[1];
+                i2 = remainingFace.vertexIndices[2];
+                {
+                    index_t idx0, idx1, idx2;
+                    idx0.vertex_index = i0.vIndex;
+                    idx0.normal_index = i0.vnIndex;
+                    idx0.texcoord_index = i0.vtIndex;
+                    idx1.vertex_index = i1.vIndex;
+                    idx1.normal_index = i1.vnIndex;
+                    idx1.texcoord_index = i1.vtIndex;
+                    idx2.vertex_index = i2.vIndex;
+                    idx2.normal_index = i2.vnIndex;
+                    idx2.texcoord_index = i2.vtIndex;
+
+                    shape->mesh.indices.push_back(idx0);
+                    shape->mesh.indices.push_back(idx1);
+                    shape->mesh.indices.push_back(idx2);
+
+                    shape->mesh.num_face_vertices.push_back(3);
+                    shape->mesh.material_ids.push_back(materialId);
+                    shape->mesh.smoothingGroupId.push_back(
+                            face.smoothingGroupId);
+                }
+            }
+        }  // faceVertexNum
     }
     return true;
 }

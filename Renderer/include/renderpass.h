@@ -16,6 +16,6 @@ public:
     GLuint program;
     int width = 512;
     int height = 512;
-    void bindData(bool finalPass = false);
+    void bindData();
     void draw(std::vector<GLuint> texPassArray = {}) const;
 };
