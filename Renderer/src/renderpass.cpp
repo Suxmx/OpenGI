@@ -26,7 +26,8 @@ void RenderPass::bindData()
 {
     glGenFramebuffers(1, &FBO);
     glBindFramebuffer(GL_FRAMEBUFFER, FBO);
-
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     std::vector<vec3> square = {vec3(-1, -1, 0), vec3(1, -1, 0), vec3(-1, 1, 0), vec3(1, 1, 0), vec3(-1, 1, 0),
@@ -34,10 +35,14 @@ void RenderPass::bindData()
     glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * square.size(), NULL, GL_STATIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec3) * square.size(), &square[0]);
 
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
     glEnableVertexAttribArray(0);   // layout (location = 0)
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid *) 0);
+    vector<int> indices{0,1,2,2};
+    GLuint EBOid;
+    glGenBuffers(1, &EBOid);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOid);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(int), indices.data(),
+                 GL_STATIC_DRAW);
 
     std::vector<GLuint> attachments;
     for (int i = 0; i < colorAttachments.size(); i++)
