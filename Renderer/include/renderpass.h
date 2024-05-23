@@ -5,6 +5,7 @@
 #include <glad/glad.h>
 #include <string>
 #include <glm/glm.hpp>
+#include <map>
 
 using namespace glm;
 using namespace std;
@@ -18,18 +19,20 @@ public:
     }
 
     ~RenderPass() {
-//        glDeleteFramebuffers(1, &fbo);
-//        glDeleteTextures(1, &colorTexture);
+        glDeleteFramebuffers(1, &fbo);
+        glDeleteTextures(1, &colorTexture);
     }
     void init(int width, int height);
 
-    void begin() const;
+    virtual void begin() const;
 
-    void end();
+    virtual void end();
 
+    virtual void draw();
     GLuint getColorTexture() const;
     GLuint getShader()const;
-    virtual void draw();
+    map<string,GLuint> bindTexes;
+
 
 private:
     void setupFramebuffer();

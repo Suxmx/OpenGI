@@ -48,88 +48,6 @@ GLFWwindow *initAll()
 }
 
 
-//void loadObj(const char *filename, vector<Mesh> &meshes)
-//{
-//    vector<Vertex> vertices;
-//    meshes.clear();
-//    curModel = Model(filename, "Models/");
-//    curModel.Load(nullptr, nullptr);
-//    for (const auto &shape: curModel.shapes)
-//    {
-//        Mesh mesh{};
-//        bool needCalcNormal = false;
-//        if (!shape.mesh.material_ids.empty())
-//        {
-//            if (shape.mesh.material_ids[0] >= 0)
-//                mesh.material = curModel.materials[shape.mesh.material_ids[0]];
-//        }
-//        for (const auto &index: shape.mesh.indices)
-//        {
-//            Vertex v{};
-//            // pos
-//            vec3 v1, v2, v3;
-//            v.position[0] = curModel.vertexAttribute.vertices[3 * index.vertex_index];
-//            v.position[1] = curModel.vertexAttribute.vertices[3 * index.vertex_index + 1];
-//            v.position[2] = curModel.vertexAttribute.vertices[3 * index.vertex_index + 2];
-//            // normal
-//            if (index.normal_index >= 0)
-//            {
-//                v.normal[0] = curModel.vertexAttribute.normals[3 * index.normal_index];
-//                v.normal[1] = curModel.vertexAttribute.normals[3 * index.normal_index + 1];
-//                v.normal[2] = curModel.vertexAttribute.normals[3 * index.normal_index + 2];
-//            }
-//            // uv
-//            if (index.texcoord_index >= 0)
-//            {
-//                v.texcoord[0] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index];
-//                v.texcoord[1] = curModel.vertexAttribute.texcoords[2 * index.texcoord_index + 1];
-//            }
-//            else needCalcNormal = true;
-//            mesh.indices.push_back(mesh.indices.size());
-//            vertices.push_back(v);
-//        }
-//        //若无法向量则重新计算
-//        if (needCalcNormal)
-//        {
-//            for (int i = 0; i < vertices.size(); i += 3)
-//            {
-//                if (i + 2 >= vertices.size())break;
-//                vec3 v1, v2, v3;
-//                v1 = vertices[i].position;
-//                v2 = vertices[i + 1].position;
-//                v3 = vertices[i + 2].position;
-//                vertices[i].normal = vertices[i + 1].normal = vertices[i + 2].normal = calculateNormal(v1, v2, v3);
-//            }
-//        }
-//
-//        unsigned int VBOid, VAOid, EBOid;
-//        glGenVertexArrays(1, &VAOid);
-//        glBindVertexArray(VAOid);
-//        //VAOBegin
-//        glGenBuffers(1, &VBOid);
-//        glBindBuffer(GL_ARRAY_BUFFER, VBOid);
-//        //vertices
-//        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STATIC_DRAW);
-//        //position
-//        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, position));
-//        //normal
-//        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, normal));
-//        //uv
-//        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *) offsetof(Vertex, texcoord));
-//        glEnableVertexAttribArray(0);
-//        glEnableVertexAttribArray(1);
-//        glEnableVertexAttribArray(2);
-//        glGenBuffers(1, &EBOid);
-//        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOid);
-//        glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(int), mesh.indices.data(), GL_STATIC_DRAW);
-//
-//        mesh.VAO = VAOid;
-//        meshes.push_back(mesh);
-//        vertices.clear();
-//    }
-//
-//}
-
 bool checkViewportChange(ImVec2 viewportSize)
 {
     return false;
@@ -216,8 +134,6 @@ void processInput(GLFWwindow *window)
 void drawOpengl()
 {
     pipeline.render();
-//    pipeline.passes[0].draw();
-
 }
 
 int main()
@@ -229,14 +145,28 @@ int main()
     }
     glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
     shader testShader("./Shaders/tvert.glsl", "./Shaders/tfrag.glsl");
-    shader testPassShader("./Shaders/pass2v.glsl", "./Shaders/pass2f.glsl");
+
+
+    //准备数据
+    vector<triangle> triangles;
+    loadObj("./Models/Stanford Bunny.obj", triangles,
+            getTransformMatrix(vec3(0, 0, 0), vec3(0.3, -1.6, 0), vec3(1.5, 1.5, 1.5)));
+    vector<triangle_encoded> encode_triangles = encodeTriangles(triangles);
+    GLuint tbo0, triangleTexBuffer;
+    glGenBuffers(1, &tbo0);
+    glBindBuffer(GL_TEXTURE_BUFFER, tbo0);
+    glBufferData(GL_TEXTURE_BUFFER, encode_triangles.size() * sizeof(triangle_encoded), encode_triangles.data(),
+                 GL_STATIC_DRAW);
+    glGenTextures(1, &triangleTexBuffer);
+    glBindTexture(GL_TEXTURE_BUFFER, triangleTexBuffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo0);
+    
     pipeline.init(512, 512);
+    pipeline.bindTriangleTexBuffer(triangleTexBuffer);
     pipeline.addRenderPass(testShader.ID);
-    pipeline.addRenderPass(testPassShader.ID);
     //Render Loop
     while (!glfwWindowShouldClose(window))
     {
-
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         //Render Command
         drawOpengl();

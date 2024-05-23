@@ -3,8 +3,8 @@
 
 void RenderPass::init(int width, int height)
 {
-    this->width=width;
-    this->height=height;
+    this->width = width;
+    this->height = height;
     setupFramebuffer();
     setupCanvas();
 }
@@ -15,6 +15,13 @@ void RenderPass::begin() const
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderProgram);
+    int cnt = 0;
+    for (const auto &pair: bindTexes)
+    {
+        glActiveTexture(GL_TEXTURE0 + cnt);
+        glBindTexture(GL_TEXTURE_BUFFER, pair.second);
+        glUniform1i(glGetUniformLocation(shaderProgram, pair.first.c_str()), cnt++);
+    }
 }
 
 void RenderPass::end()
@@ -77,7 +84,7 @@ void RenderPass::setupCanvas()
     glBufferData(GL_ARRAY_BUFFER, square.size() * sizeof(vec3), &square[0], GL_STATIC_DRAW);
 
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void *) 0);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);

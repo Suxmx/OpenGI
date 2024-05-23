@@ -16,14 +16,14 @@ public:
 
     void render();
     void init(int width,int height);
-
+    void bindTriangleTexBuffer(GLuint buffer);
     GLuint getRenderTexture();
 
     std::vector<RenderPass> passes;
 private:
-    void bindLastPassTexture(GLuint shader, GLuint texture);
+    void bindLastPassTexture(RenderPass& pass, GLuint texture);
 
 
     int width, height;
-    GLuint vao = 0, vbo = 0;
+    GLuint vao = 0, vbo = 0,triangleTexBuffer;
 };

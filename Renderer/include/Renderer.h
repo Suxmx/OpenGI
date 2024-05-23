@@ -17,6 +17,7 @@
 #include "render_data.h"
 #include "renderpass.h"
 #include "renderPipeline.h"
+#include "utilities.h"
 
 //imgui
 #include "imgui.h"
