@@ -1,4 +1,4 @@
-#version 100
+#version 330 core
 in vec3 pix;
 //out vec4 color;
 void main() {

@@ -1,68 +1,92 @@
 #include "renderpass.h"
 
-void RenderPass::draw(std::vector<GLuint> texPassArray) const
+
+void RenderPass::init(int width, int height)
 {
-    glUseProgram(program);
-    glBindFramebuffer(GL_FRAMEBUFFER, FBO);
-    glBindVertexArray(vao);
+    this->width=width;
+    this->height=height;
+    setupFramebuffer();
+    setupCanvas();
+}
 
-    // 传上一帧的帧缓冲颜色附件
-    for (int i = 0; i < texPassArray.size(); i++)
-    {
-        glActiveTexture(GL_TEXTURE0 + i);
-        glBindTexture(GL_TEXTURE_2D, texPassArray[i]);
-        std::string uName = "texPass" + std::to_string(i);
-        glUniform1i(glGetUniformLocation(program, uName.c_str()), i);
-    }
-
+void RenderPass::begin() const
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, width, height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glUseProgram(shaderProgram);
+}
 
-    // 确保绑定了EBO
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-    glBindVertexArray(0);
+void RenderPass::end()
+{
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glUseProgram(0);
 }
 
-void RenderPass::bindData()
+GLuint RenderPass::getColorTexture() const
 {
-    glGenFramebuffers(1, &FBO);
-    glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+    return colorTexture;
+}
 
-    glGenVertexArrays(1, &vao);
+void RenderPass::draw()
+{
+//    begin();
     glBindVertexArray(vao);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+//    end();
+}
 
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+void RenderPass::setupFramebuffer()
+{
+    glGenFramebuffers(1, &fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
 
+    glGenTextures(1, &colorTexture);
+    glBindTexture(GL_TEXTURE_2D, colorTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
+
+    GLuint rbo;
+    glGenRenderbuffers(1, &rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cerr << "Framebuffer not complete!" << std::endl;
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+void RenderPass::setupCanvas()
+{
     std::vector<vec3> square = {
             vec3(-1, -1, 0), vec3(1, -1, 0), vec3(-1, 1, 0),
             vec3(1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0)
     };
 
-    // 上传顶点数据
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vec3) * square.size(), &square[0], GL_STATIC_DRAW);
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
 
-    glEnableVertexAttribArray(0);   // layout (location = 0)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    glBindVertexArray(vao);
 
-    // 生成并绑定EBO
-    vector<int> indices{0, 1, 2, 3, 4, 5};
-    glGenBuffers(1, &ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(int), indices.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, square.size() * sizeof(vec3), &square[0], GL_STATIC_DRAW);
 
-    std::vector<GLuint> attachments;
-    for (int i = 0; i < colorAttachments.size(); i++)
-    {
-        glBindTexture(GL_TEXTURE_2D, colorAttachments[i]);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorAttachments[i], 0);
-        attachments.push_back(GL_COLOR_ATTACHMENT0 + i);
-    }
-    glDrawBuffers(attachments.size(), &attachments[0]);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
 }
+
+GLuint RenderPass::getShader() const
+{
+    return shaderProgram;
+}
+
+
+

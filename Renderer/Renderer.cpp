@@ -4,32 +4,8 @@ using namespace glm;
 using namespace std;
 
 const int screenWidth = 1920, screenHeight = 1080;
-
-
-vector<string> models;
-unsigned int VAO, currentModel = 0;
-GLuint framebuffer, textureColorbuffer, depthBuffer, imguiViewportTexture;
+RenderPipeline pipeline;
 mat4 model = mat4(1), view = mat4(1), proj = mat4(1), mvp;
-RenderPass renderPass;
-
-GLuint getTextureRGB32F(int width, int height)
-{
-    GLuint tex;
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    return tex;
-}
-
-
-void framebufferSizeCallback(GLFWwindow *window, int width, int height)
-{
-//    SetupFramebuffer(width,height);
-}
 
 GLFWwindow *initAll()
 {
@@ -38,7 +14,7 @@ GLFWwindow *initAll()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow *window = glfwCreateWindow(screenWidth, screenHeight, "LearnOpenGL", NULL, NULL);
+    GLFWwindow *window = glfwCreateWindow(screenWidth, screenHeight, "OpenGI", NULL, NULL);
     if (window == NULL)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
@@ -55,8 +31,7 @@ GLFWwindow *initAll()
     //Init opengl
     glViewport(0, 0, screenHeight, screenHeight);
     glEnable(GL_DEPTH_TEST);
-    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
-    //Init imgui
+//Init imgui
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
@@ -69,20 +44,9 @@ GLFWwindow *initAll()
     ImGui::StyleColorsDark();
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init();
-
     return window;
 }
 
-Model curModel("");
-
-vec3 calculateNormal(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2)
-{
-    glm::vec3 e1 = v1 - v0;  // 边向量 1
-    glm::vec3 e2 = v2 - v0;  // 边向量 2
-    glm::vec3 normal = glm::cross(e1, e2);  // 计算叉积得到法线向量
-    normal = glm::normalize(normal);  // 归一化法线向量
-    return normal;
-}
 
 //void loadObj(const char *filename, vector<Mesh> &meshes)
 //{
@@ -166,40 +130,15 @@ vec3 calculateNormal(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &
 //
 //}
 
-
-typedef pair<int, bool> KeyPair;
-
-void processInput(GLFWwindow *window)
-{
-    static map<int, bool> keyStayMap{KeyPair(GLFW_KEY_ESCAPE, false), KeyPair(GLFW_KEY_ENTER, false)};
-    map<int, bool> keyDownMap;
-    map<int, bool> keyUpMap;
-    for (auto &p: keyStayMap)
-    {
-        int state = glfwGetKey(window, p.first);
-        keyDownMap[p.first] = state == GLFW_PRESS && !keyStayMap[p.first];
-        keyUpMap[p.first] = state == GLFW_RELEASE && keyStayMap[p.first];
-        keyStayMap[p.first] = state == GLFW_PRESS;
-    }
-
-    if (keyDownMap[GLFW_KEY_ESCAPE])
-    {
-        glfwSetWindowShouldClose(window, true);
-    }
-}
-
-ImVec2 gl_viewport_size;
-
 bool checkViewportChange(ImVec2 viewportSize)
 {
-    return ((int) viewportSize.x != (int) gl_viewport_size.x || ((int) viewportSize.y != (int) gl_viewport_size.y));
+    return false;
+//    return ((int) viewportSize.x != (int) gl_viewport_size.x || ((int) viewportSize.y != (int) gl_viewport_size.y));
 }
-
-bool firstFrame = true;
 
 void drawImgui()
 {
-    firstFrame = false;
+
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -231,18 +170,9 @@ void drawImgui()
     ImVec2 content_min = ImGui::GetWindowContentRegionMin();
     ImVec2 content_max = ImGui::GetWindowContentRegionMax();
 
-    auto new_gl_viewport_size = ImVec2(content_max.x - content_min.x, content_max.y - content_min.y);
-    if (checkViewportChange(new_gl_viewport_size))
-    {
-        gl_viewport_size = new_gl_viewport_size;
+    auto contentSize = ImVec2(content_max.x - content_min.x, content_max.y - content_min.y);
 
-        renderPass.width = (int) new_gl_viewport_size.x;
-        renderPass.height = (int) new_gl_viewport_size.y;
-        renderPass.colorAttachments.clear();
-        renderPass.colorAttachments.push_back(getTextureRGB32F(renderPass.width, renderPass.height));
-        renderPass.bindData();
-    }
-    ImGui::Image((void *) (intptr_t) renderPass.colorAttachments[0], new_gl_viewport_size, ImVec2(0, 1), ImVec2(1, 0));
+    ImGui::Image((void *) (intptr_t) pipeline.getRenderTexture(), contentSize, ImVec2(0, 1), ImVec2(1, 0));
 
     //opengl window end
     ImGui::End();
@@ -261,11 +191,33 @@ void drawImgui()
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
+typedef pair<int, bool> KeyPair;
+
+void processInput(GLFWwindow *window)
+{
+    static map<int, bool> keyStayMap{KeyPair(GLFW_KEY_ESCAPE, false), KeyPair(GLFW_KEY_ENTER, false)};
+    map<int, bool> keyDownMap;
+    map<int, bool> keyUpMap;
+    for (auto &p: keyStayMap)
+    {
+        int state = glfwGetKey(window, p.first);
+        keyDownMap[p.first] = state == GLFW_PRESS && !keyStayMap[p.first];
+        keyUpMap[p.first] = state == GLFW_RELEASE && keyStayMap[p.first];
+        keyStayMap[p.first] = state == GLFW_PRESS;
+    }
+
+    if (keyDownMap[GLFW_KEY_ESCAPE])
+    {
+        glfwSetWindowShouldClose(window, true);
+    }
+}
+
+
 void drawOpengl()
 {
-    if (firstFrame)return;
+    pipeline.render();
+//    pipeline.passes[0].draw();
 
-    renderPass.draw();
 }
 
 int main()
@@ -275,16 +227,18 @@ int main()
     {
         return -1;
     }
+    glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
     shader testShader("./Shaders/tvert.glsl", "./Shaders/tfrag.glsl");
-    renderPass.program = testShader.ID;
+    shader testPassShader("./Shaders/pass2v.glsl", "./Shaders/pass2f.glsl");
+    pipeline.init(512, 512);
+    pipeline.addRenderPass(testShader.ID);
+    pipeline.addRenderPass(testPassShader.ID);
     //Render Loop
     while (!glfwWindowShouldClose(window))
     {
-        glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
         //Render Command
-
         drawOpengl();
         drawImgui();
 
