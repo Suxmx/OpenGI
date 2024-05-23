@@ -7,12 +7,14 @@
 #include <glm/glm.hpp>
 #include <map>
 
+#include "shader.h"
+
 using namespace glm;
 using namespace std;
 
 class RenderPass {
 public:
-    RenderPass(int width, int height,GLuint shader) : width(width), height(height),shaderProgram(shader)
+    RenderPass(int width, int height,shader s) : width(width), height(height),passShader(s),shaderProgram(s.ID)
     {
         setupFramebuffer();
         setupCanvas();
@@ -22,15 +24,16 @@ public:
         glDeleteFramebuffers(1, &fbo);
         glDeleteTextures(1, &colorTexture);
     }
-    void init(int width, int height);
 
     virtual void begin() const;
 
     virtual void end();
 
     virtual void draw();
+
     GLuint getColorTexture() const;
-    GLuint getShader()const;
+    GLuint getShaderId()const;
+    shader* getShader();
     map<string,GLuint> bindTexes;
 
 
@@ -42,4 +45,5 @@ private:
     GLuint colorTexture;
     int width, height;
     GLuint shaderProgram;
+    shader passShader;
 };

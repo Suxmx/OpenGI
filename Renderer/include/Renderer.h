@@ -10,10 +10,11 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include <memory>
 
 //custom
 #include "obj_loader.h"
-#include "shader.h"
+//#include "shader.h"
 #include "render_data.h"
 #include "renderpass.h"
 #include "renderPipeline.h"

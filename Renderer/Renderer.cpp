@@ -160,10 +160,15 @@ int main()
     glGenTextures(1, &triangleTexBuffer);
     glBindTexture(GL_TEXTURE_BUFFER, triangleTexBuffer);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo0);
-    
+
     pipeline.init(512, 512);
     pipeline.bindTriangleTexBuffer(triangleTexBuffer);
-    pipeline.addRenderPass(testShader.ID);
+    auto pass1 = make_shared<RenderPass>(pipeline.width, pipeline.height, testShader);
+    pass1->bindTexes["triangles"] = triangleTexBuffer;
+    glUseProgram(pass1->getShaderId());
+    pass1->getShader()->setInt("nTriangles",encode_triangles.size());
+    glUseProgram(0);
+    pipeline.addRenderPass(pass1);
     //Render Loop
     while (!glfwWindowShouldClose(window))
     {

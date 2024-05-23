@@ -1,14 +1,5 @@
 #include "renderpass.h"
 
-
-void RenderPass::init(int width, int height)
-{
-    this->width = width;
-    this->height = height;
-    setupFramebuffer();
-    setupCanvas();
-}
-
 void RenderPass::begin() const
 {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -90,10 +81,12 @@ void RenderPass::setupCanvas()
     glBindVertexArray(0);
 }
 
-GLuint RenderPass::getShader() const
+GLuint RenderPass::getShaderId() const
 {
     return shaderProgram;
 }
 
-
-
+shader* RenderPass::getShader()
+{
+    return &passShader;
+}

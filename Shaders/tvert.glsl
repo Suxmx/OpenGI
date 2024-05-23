@@ -2,6 +2,7 @@
 
 layout (location = 0) in vec3 vPosition;  // cpu传入的顶点坐标
 uniform samplerBuffer triangles;
+uniform int nTriangles;
 out vec3 pix;
 out float test;
 
