@@ -1,6 +1,6 @@
 #version 100
 in vec3 pix;
-out vec4 color;
+//out vec4 color;
 void main() {
-    color=vec4(pix,1);
+    gl_FragData[0]=vec4(pix,1);
 }

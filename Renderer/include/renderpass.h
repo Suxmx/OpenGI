@@ -11,7 +11,7 @@ using namespace std;
 class RenderPass {
 public:
     GLuint FBO = 0;
-    GLuint vao, vbo;
+    GLuint vao, vbo,ebo;
     std::vector<GLuint> colorAttachments;
     GLuint program;
     int width = 512;
