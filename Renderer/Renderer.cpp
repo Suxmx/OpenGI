@@ -53,7 +53,15 @@ bool checkViewportChange(ImVec2 viewportSize)
     return false;
 //    return ((int) viewportSize.x != (int) gl_viewport_size.x || ((int) viewportSize.y != (int) gl_viewport_size.y));
 }
-
+clock_t lastT;
+double fps()
+{
+    double t,fps,dt;
+    t = clock();
+    dt = (double)(t - lastT) / CLOCKS_PER_SEC;
+    fps = 1.0 / dt;
+    return fps;
+}
 void drawImgui()
 {
 
@@ -91,6 +99,16 @@ void drawImgui()
     auto contentSize = ImVec2(content_max.x - content_min.x, content_max.y - content_min.y);
 
     ImGui::Image((void *) (intptr_t) pipeline.getRenderTexture(), contentSize, ImVec2(0, 1), ImVec2(1, 0));
+    //显示帧率
+    float frameRate = ImGui::GetIO().Framerate;
+    char frameRateText[64];
+    sprintf(frameRateText, "FPS: %.1f", frameRate);
+    // 计算文本的位置，使其显示在图像上方
+    ImVec2 text_pos = ImVec2(content_min.x+20, content_min.y + ImGui::GetTextLineHeight()*3);
+
+// 使用透明背景绘制文字浮在图像上方
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddText(text_pos, IM_COL32(255, 255, 255, 255), frameRateText);
 
     //opengl window end
     ImGui::End();
@@ -162,12 +180,9 @@ int main()
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo0);
 
     pipeline.init(512, 512);
-    pipeline.bindTriangleTexBuffer(triangleTexBuffer);
-    auto pass1 = make_shared<RenderPass>(pipeline.width, pipeline.height, testShader);
+    auto pass1 = make_shared<FirstPass>(pipeline.width, pipeline.height, testShader);
+    pass1->nTriangle=encode_triangles.size();
     pass1->bindTexes["triangles"] = triangleTexBuffer;
-    glUseProgram(pass1->getShaderId());
-    pass1->getShader()->setInt("nTriangles",encode_triangles.size());
-    glUseProgram(0);
     pipeline.addRenderPass(pass1);
     //Render Loop
     while (!glfwWindowShouldClose(window))

@@ -127,6 +127,8 @@ vector<triangle_encoded> encodeTriangles(vector<triangle> &triangles)
             et.emissive[i] = t.material.emission[i];
             et.baseColor[i] = t.material.diffuse[i];
         }
+        //for test
+        et.baseColor=vec3(1,1,0);
         ets.emplace_back(et);
     }
     return ets;

@@ -37,7 +37,7 @@ public:
     map<string,GLuint> bindTexes;
 
 
-private:
+protected:
     void setupFramebuffer();
     void setupCanvas();
 
@@ -46,4 +46,12 @@ private:
     int width, height;
     GLuint shaderProgram;
     shader passShader;
+};
+class FirstPass : public RenderPass
+{
+public:
+    FirstPass(int width, int height, const shader &s);
+
+    int nTriangle;
+    void draw() override;
 };

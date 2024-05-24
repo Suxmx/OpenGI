@@ -7,12 +7,14 @@ void RenderPass::begin() const
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderProgram);
     int cnt = 0;
+
     for (const auto &pair: bindTexes)
     {
         glActiveTexture(GL_TEXTURE0 + cnt);
         glBindTexture(GL_TEXTURE_BUFFER, pair.second);
         glUniform1i(glGetUniformLocation(shaderProgram, pair.first.c_str()), cnt++);
     }
+
 }
 
 void RenderPass::end()
@@ -86,7 +88,16 @@ GLuint RenderPass::getShaderId() const
     return shaderProgram;
 }
 
-shader* RenderPass::getShader()
+shader *RenderPass::getShader()
 {
     return &passShader;
 }
+
+void FirstPass::draw()
+{
+    passShader.setInt("nTriangle",nTriangle);
+    RenderPass::draw();
+}
+
+FirstPass::FirstPass(int width, int height, const shader &s) : RenderPass(width, height, s)
+{}

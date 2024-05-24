@@ -11,6 +11,7 @@
 #include <map>
 #include <unordered_map>
 #include <memory>
+#include <time.h>
 
 //custom
 #include "obj_loader.h"
