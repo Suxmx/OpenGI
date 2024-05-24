@@ -5,19 +5,12 @@
 #include "obj_loader.h"
 #include <vector>
 
-using namespace std;
+
+//using namespace std;
 using namespace glm;
 
-vec3 calculateNormal(const glm::vec3 &v0, const glm::vec3 &v1, const glm::vec3 &v2)
-{
-    glm::vec3 e1 = v1 - v0;  // 边向量 1
-    glm::vec3 e2 = v2 - v0;  // 边向量 2
-    glm::vec3 normal = glm::cross(e1, e2);  // 计算叉积得到法线向量
-    normal = glm::normalize(normal);  // 归一化法线向量
-    return normal;
-}
 
-void loadObj(const char *filename, vector<triangle> &triangles, mat4 modelMat = mat4(1))
+void loadObj(const char *filename, vector<triangle> &triangles, mat4 modelMat = mat4(1), vec3 color = vec3(1, 1, 1))
 {
     Model m = Model(filename, "Models/");
     m.Load(nullptr, nullptr);
@@ -28,16 +21,16 @@ void loadObj(const char *filename, vector<triangle> &triangles, mat4 modelMat = 
     {
         vec3 v = vec3(m.vertexAttribute.vertices[i], m.vertexAttribute.vertices[i + 1],
                       m.vertexAttribute.vertices[i + 2]);
-        minx = std::min(v.x, minx);
-        miny = std::min(v.y, miny);
-        minz = std::min(v.z, minz);
+        minx = glm::min(v.x, minx);
+        miny = glm::min(v.y, miny);
+        minz = glm::min(v.z, minz);
 
-        maxx = std::max(v.x, maxx);
-        maxy = std::max(v.y, maxy);
-        maxz = std::max(v.z, maxz);
+        maxx = glm::max(v.x, maxx);
+        maxy = glm::max(v.y, maxy);
+        maxz = glm::max(v.z, maxz);
     }
     float boundx = maxx - minx, boundy = maxy - miny, boundz = maxz - minz;
-    float maxbound = std::max(std::max(boundx, boundy), boundz);
+    float maxbound = glm::max(glm::max(boundx, boundy), boundz);
     for (auto &v: m.vertexAttribute.vertices)
     {
         v /= maxbound;
@@ -101,37 +94,24 @@ void loadObj(const char *filename, vector<triangle> &triangles, mat4 modelMat = 
 
             int numFace = i / 3;
             int materialId = numFace < shape.mesh.material_ids.size() ? shape.mesh.material_ids[numFace] : -1;
-            t.material = materialId >= 0 ? m.materials[materialId] : material_t();
+            material_t m2cpy = materialId >= 0 ? m.materials[materialId] : material_t();
+            material tmpm{.name=m2cpy.name};
+            for (int ii = 0; ii < 3; ii++)
+            {
+                tmpm.ambient[ii] = m2cpy.ambient[ii];
+//                tmpm.diffuse[ii] = m2cpy.diffuse[ii];
+//TODO:需要时改为材质中的颜色
+                tmpm.diffuse[ii] = color[ii];
+                tmpm.specular[ii] = m2cpy.specular[ii];
+                tmpm.transmittance[ii] = m2cpy.transmittance[ii];
+                tmpm.emission[ii] = m2cpy.emission[ii];
+            }
+            t.material = tmpm;
 //            t.bindData();
             triangles.emplace_back(t);
         }
     }
 
-}
-
-vector<triangle_encoded> encodeTriangles(vector<triangle> &triangles)
-{
-    vector<triangle_encoded> ets;
-    ets.reserve(triangles.size());
-    for (const auto &t: triangles)
-    {
-        triangle_encoded et;
-        et.p1 = t.p1;
-        et.p2 = t.p2;
-        et.p3 = t.p3;
-        et.n1 = t.n1;
-        et.n2 = t.n2;
-        et.n3 = t.n3;
-        for (int i = 0; i < 3; i++)
-        {
-            et.emissive[i] = t.material.emission[i];
-            et.baseColor[i] = t.material.diffuse[i];
-        }
-        //for test
-        et.baseColor=vec3(1,1,0);
-        ets.emplace_back(et);
-    }
-    return ets;
 }
 
 mat4 getTransformMatrix(vec3 rotateCtrl, vec3 translateCtrl, vec3 scaleCtrl)

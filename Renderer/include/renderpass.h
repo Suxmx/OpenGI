@@ -52,6 +52,6 @@ class FirstPass : public RenderPass
 public:
     FirstPass(int width, int height, const shader &s);
 
-    int nTriangle;
+    int nTriangle,nBVHNode;
     void draw() override;
 };

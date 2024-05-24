@@ -96,6 +96,7 @@ shader *RenderPass::getShader()
 void FirstPass::draw()
 {
     passShader.setInt("nTriangle",nTriangle);
+    passShader.setInt("nNodes",nBVHNode);
     RenderPass::draw();
 }
 

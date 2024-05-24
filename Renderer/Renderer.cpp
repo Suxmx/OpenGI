@@ -47,21 +47,17 @@ GLFWwindow *initAll()
     return window;
 }
 
-
-bool checkViewportChange(ImVec2 viewportSize)
-{
-    return false;
-//    return ((int) viewportSize.x != (int) gl_viewport_size.x || ((int) viewportSize.y != (int) gl_viewport_size.y));
-}
 clock_t lastT;
+
 double fps()
 {
-    double t,fps,dt;
+    double t, fps, dt;
     t = clock();
-    dt = (double)(t - lastT) / CLOCKS_PER_SEC;
+    dt = (double) (t - lastT) / CLOCKS_PER_SEC;
     fps = 1.0 / dt;
     return fps;
 }
+
 void drawImgui()
 {
 
@@ -95,7 +91,7 @@ void drawImgui()
     ImGui::Begin("OpenGL Viewport", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar);
     ImVec2 content_min = ImGui::GetWindowContentRegionMin();
     ImVec2 content_max = ImGui::GetWindowContentRegionMax();
-
+    ImVec2 window_pos = ImGui::GetWindowPos();
     auto contentSize = ImVec2(content_max.x - content_min.x, content_max.y - content_min.y);
 
     ImGui::Image((void *) (intptr_t) pipeline.getRenderTexture(), contentSize, ImVec2(0, 1), ImVec2(1, 0));
@@ -104,10 +100,12 @@ void drawImgui()
     char frameRateText[64];
     sprintf(frameRateText, "FPS: %.1f", frameRate);
     // 计算文本的位置，使其显示在图像上方
-    ImVec2 text_pos = ImVec2(content_min.x+20, content_min.y + ImGui::GetTextLineHeight()*3);
+    ImVec2 text_pos = ImVec2(content_min.x + 20 + window_pos.x,
+                             content_min.y + ImGui::GetTextLineHeight() + window_pos.y);
+
 
 // 使用透明背景绘制文字浮在图像上方
-    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImDrawList *draw_list = ImGui::GetWindowDrawList();
     draw_list->AddText(text_pos, IM_COL32(255, 255, 255, 255), frameRateText);
 
     //opengl window end
@@ -168,9 +166,22 @@ int main()
     //准备数据
     vector<triangle> triangles;
     loadObj("./Models/Stanford Bunny.obj", triangles,
-            getTransformMatrix(vec3(0, 0, 0), vec3(0.3, -1.6, 0), vec3(1.5, 1.5, 1.5)));
+            getTransformMatrix(vec3(0, 0, 0), vec3(0.3, -1.6, 0), vec3(1.5, 1.5, 1.5)),vec3(0.5,0.5,1));
+    loadObj("./Models/quad.obj",triangles,getTransformMatrix(vec3(0, 0, 0), vec3(0, -1.4, 0), vec3(18.83, 0.01, 18.83)),vec3(1,1,1));
+    //建立BVH
+    BVHNode testNode;
+    testNode.left = 255;
+    testNode.right = 128;
+    testNode.n = 30;
+    testNode.AA = vec3(1, 1, 0);
+    testNode.BB = vec3(0, 1, 0);
+    vector<BVHNode> nodes{testNode};
+    buildBVHwithSAH(triangles, nodes, 0, triangles.size() - 1, 8);
     vector<triangle_encoded> encode_triangles = encodeTriangles(triangles);
-    GLuint tbo0, triangleTexBuffer;
+    vector<BVHNode_encoded> encode_bvh = encodeBVHNodes(nodes);
+    //开始绑定texture buffer
+    GLuint tbo0, tbo1, triangleTexBuffer, bvhTexBuffer;
+    //将三角形数据传入texture buffer
     glGenBuffers(1, &tbo0);
     glBindBuffer(GL_TEXTURE_BUFFER, tbo0);
     glBufferData(GL_TEXTURE_BUFFER, encode_triangles.size() * sizeof(triangle_encoded), encode_triangles.data(),
@@ -178,11 +189,21 @@ int main()
     glGenTextures(1, &triangleTexBuffer);
     glBindTexture(GL_TEXTURE_BUFFER, triangleTexBuffer);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo0);
+    //将BVH数据传入texture buffer
+    glGenBuffers(1, &tbo1);
+    glBindBuffer(GL_TEXTURE_BUFFER, tbo1);
+    glBufferData(GL_TEXTURE_BUFFER, encode_bvh.size() * sizeof(BVHNode_encoded), encode_bvh.data(), GL_STATIC_DRAW);
+    glGenTextures(1, &bvhTexBuffer);
+    glBindTexture(GL_TEXTURE_BUFFER, bvhTexBuffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo1);
 
-    pipeline.init(512, 512);
+    //初始化渲染管线
+    pipeline.init(1024, 1024);
     auto pass1 = make_shared<FirstPass>(pipeline.width, pipeline.height, testShader);
-    pass1->nTriangle=encode_triangles.size();
+    pass1->nTriangle = encode_triangles.size();
+    pass1->nBVHNode = nodes.size();
     pass1->bindTexes["triangles"] = triangleTexBuffer;
+    pass1->bindTexes["bvh"] = bvhTexBuffer;
     pipeline.addRenderPass(pass1);
     //Render Loop
     while (!glfwWindowShouldClose(window))

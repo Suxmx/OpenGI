@@ -1,50 +1,61 @@
 #pragma once
 
 #include <glm/glm.hpp>
-#include "obj_loader.h"
 #include <vector>
-using namespace glm;
+//#include "obj_loader.h"
+#include <algorithm>
+#include <string>
 
+using namespace glm;
+using namespace std;
+struct material
+{
+    std::string name;
+    float ambient[3];
+    float diffuse[3];
+    float specular[3];
+    float transmittance[3];
+    float emission[3];
+    float shininess;
+    float ior;       // 折射率
+    float dissolve;  //"1 == 不透明，0 == 完全透明"
+    int illum;
+};
 struct Vertex
 {
     vec3 position;
     vec3 normal;
 };
 
-//struct material {
-//    vec3 emissive = vec3(0, 0, 0);  // 作为光源时的发光颜色
-//    vec3 baseColor = vec3(1, 1, 1);
-//    float subsurface = 0.0;
-//    float metallic = 0.0;
-//    float specular = 0.0;
-//    float specularTint = 0.0;
-//    float roughness = 0.0;
-//    float anisotropic = 0.0;
-//    float sheen = 0.0;
-//    float sheenTint = 0.0;
-//    float clearcoat = 0.0;
-//    float clearcoatGloss = 0.0;
-//    float IOR = 1.0;
-//    float transmission = 0.0;
-//};
 
-struct triangle {
+struct triangle
+{
     vec3 p1, p2, p3;    // 顶点坐标
     vec3 n1, n2, n3;    // 顶点法线
-    material_t material;  // 材质
+    material material;  // 材质
     std::vector<vec3> poses;
     std::vector<vec3> normals;
+
     void bindData()
     {
-        p1=poses[0];
-        p2=poses[1];
-        p3=poses[2];
-        n1=normals[0];
-        n2=normals[1];
-        n3=normals[2];
+        p1 = poses[0];
+        p2 = poses[1];
+        p3 = poses[2];
+        n1 = normals[0];
+        n2 = normals[1];
+        n3 = normals[2];
     }
 };
-struct triangle_encoded {
+
+
+struct BVHNode
+{
+    int left, right;    // 左右子树索引
+    int n, index;       // 叶子节点信息
+    vec3 AA, BB;        // 碰撞盒
+};
+struct triangle_encoded
+{
     vec3 p1, p2, p3;    // 顶点坐标
     vec3 n1, n2, n3;    // 顶点法线
     vec3 emissive;      // 自发光参数
@@ -54,3 +65,18 @@ struct triangle_encoded {
 //    vec3 param3;        // (sheen, sheenTint, clearcoat)
 //    vec3 param4;        // (clearcoatGloss, IOR, transmission)
 };
+struct BVHNode_encoded
+{
+    vec3 childs;        // (left, right, 保留)
+    vec3 leafInfo;      // (n, index, 保留)
+    vec3 AA, BB;
+};
+vector<triangle_encoded> encodeTriangles(vector<triangle> &triangles);
+vector<BVHNode_encoded> encodeBVHNodes(vector<BVHNode>& bvhs);
+bool cmpx(const triangle &t1, const triangle &t2);
+
+bool cmpy(const triangle &t1, const triangle &t2);
+
+bool cmpz(const triangle &t1, const triangle &t2);
+
+int buildBVHwithSAH(std::vector<triangle> &triangles, std::vector<BVHNode> &nodes, int l, int r, int n);

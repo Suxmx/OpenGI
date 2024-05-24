@@ -1,8 +1,8 @@
 //
 // Created by 42450 on 2024/5/8.
 //
-#pragma once
-
+#ifndef OBJ_LOADER
+#define OBJ_LOADER
 //Macro
 #define IS_SPACE(x) (((x) == ' ') || ((x) == '\t'))
 #define IS_DIGIT(x) (static_cast<unsigned int>((x) - '0') < static_cast<unsigned int>(10))
@@ -209,6 +209,7 @@ public:
         materials.clear();
     }
 };
+
 
 Model::Model(std::string name, std::string mtlBaseDir = "")
 {
@@ -1627,6 +1628,7 @@ static int pnpoly(int nvert, T *vertx, T *verty, T testx, T testy)
     }
     return c;
 }
+
 static bool exportGroupsToShape(shape_t *shape, const primitive_group_t &primitiveGroup, const std::string &name,
                                 const std::vector<float> &v, const int materialId, std::string *warn)
 {
@@ -2005,3 +2007,5 @@ static bool exportGroupsToShape(shape_t *shape, const primitive_group_t &primiti
     }
     return true;
 }
+
+#endif

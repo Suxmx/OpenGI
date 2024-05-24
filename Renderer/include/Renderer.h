@@ -14,7 +14,6 @@
 #include <time.h>
 
 //custom
-#include "obj_loader.h"
 //#include "shader.h"
 #include "render_data.h"
 #include "renderpass.h"
