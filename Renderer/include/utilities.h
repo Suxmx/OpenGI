@@ -10,7 +10,8 @@
 using namespace glm;
 
 
-void loadObj(const char *filename, vector<triangle> &triangles, mat4 modelMat = mat4(1), vec3 color = vec3(1, 1, 1))
+void
+loadObj(const char *filename, vector<triangle> &triangles, mat4 modelMat = mat4(1), material modelMaterial = material())
 {
     Model m = Model(filename, "Models/");
     m.Load(nullptr, nullptr);
@@ -94,19 +95,26 @@ void loadObj(const char *filename, vector<triangle> &triangles, mat4 modelMat = 
 
             int numFace = i / 3;
             int materialId = numFace < shape.mesh.material_ids.size() ? shape.mesh.material_ids[numFace] : -1;
-            material_t m2cpy = materialId >= 0 ? m.materials[materialId] : material_t();
-            material tmpm{.name=m2cpy.name};
-            for (int ii = 0; ii < 3; ii++)
+            if (materialId < 0)
             {
-                tmpm.ambient[ii] = m2cpy.ambient[ii];
-//                tmpm.diffuse[ii] = m2cpy.diffuse[ii];
-//TODO:需要时改为材质中的颜色
-                tmpm.diffuse[ii] = color[ii];
-                tmpm.specular[ii] = m2cpy.specular[ii];
-                tmpm.transmittance[ii] = m2cpy.transmittance[ii];
-                tmpm.emission[ii] = m2cpy.emission[ii];
+                t.material = modelMaterial;
             }
-            t.material = tmpm;
+            else
+            {
+                material_t m2cpy = m.materials[materialId];
+                material tmpm{.name=m2cpy.name};
+                for (int ii = 0; ii < 3; ii++)
+                {
+                    tmpm.emission[ii] = m2cpy.ambient[ii];
+                    tmpm.diffuse[ii] = m2cpy.diffuse[ii];
+                    //TODO:需要时改为材质中的颜色
+                    tmpm.specular[ii] = m2cpy.specular[ii];
+                    tmpm.transmittance[ii] = m2cpy.transmittance[ii];
+//                    tmpm.emission[ii] = m2cpy.emission[ii];
+                }
+                t.material = tmpm;
+            }
+
 //            t.bindData();
             triangles.emplace_back(t);
         }

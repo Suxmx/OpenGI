@@ -52,6 +52,17 @@ class FirstPass : public RenderPass
 public:
     FirstPass(int width, int height, const shader &s);
 
-    int nTriangle,nBVHNode;
+    int nTriangle,nBVHNode,nLight;
+    float lightArea;
+    unsigned int frameCount;
+    void draw() override;
+};
+class MixPass: public RenderPass
+{
+public:
+    int frameCount;
+    float fac;
+    MixPass(int width, int height, const shader &s);
+    void begin() const override;
     void draw() override;
 };

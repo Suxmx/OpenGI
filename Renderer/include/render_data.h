@@ -11,11 +11,11 @@ using namespace std;
 struct material
 {
     std::string name;
-    float ambient[3];
-    float diffuse[3];
-    float specular[3];
-    float transmittance[3];
-    float emission[3];
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    vec3 transmittance;
+    vec3 emission;
     float shininess;
     float ior;       // 折射率
     float dissolve;  //"1 == 不透明，0 == 完全透明"
@@ -71,7 +71,15 @@ struct BVHNode_encoded
     vec3 leafInfo;      // (n, index, 保留)
     vec3 AA, BB;
 };
+struct light_encoded
+{
+    vec3 p1,p2,p3;
+    vec3 n1,n2,n3;
+    vec3 emissive;
+    vec3 area;// (area,0,0)
+};
 vector<triangle_encoded> encodeTriangles(vector<triangle> &triangles);
+vector<light_encoded> encodeLights(vector<triangle> &triangles,float* totalArea);
 vector<BVHNode_encoded> encodeBVHNodes(vector<BVHNode>& bvhs);
 bool cmpx(const triangle &t1, const triangle &t2);
 

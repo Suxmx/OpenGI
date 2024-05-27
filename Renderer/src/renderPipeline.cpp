@@ -24,7 +24,7 @@ void RenderPipeline::bindLastPassTexture(shared_ptr<RenderPass> pass, GLuint tex
     glActiveTexture(GL_TEXTURE0 + pass->bindTexes.size());
     glBindTexture(GL_TEXTURE_2D, texture);
 
-    glUniform1i(glGetUniformLocation(pass->getShaderId(), "lastpass"), +pass->bindTexes.size());
+    glUniform1i(glGetUniformLocation(pass->getShaderId(), "lastpass"), pass->bindTexes.size());
 }
 
 GLuint RenderPipeline::getRenderTexture()
@@ -42,4 +42,9 @@ void RenderPipeline::init(int width, int height)
 void RenderPipeline::bindTriangleTexBuffer(GLuint buffer)
 {
     triangleTexBuffer = buffer;
+}
+
+shared_ptr<RenderPass> RenderPipeline::getRenderpass(int i)
+{
+    return passes[i];
 }

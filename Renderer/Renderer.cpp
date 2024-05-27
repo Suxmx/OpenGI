@@ -149,6 +149,10 @@ void processInput(GLFWwindow *window)
 
 void drawOpengl()
 {
+    static int frameCnt = 0;
+    (dynamic_pointer_cast<FirstPass>(pipeline.getRenderpass(0)))->frameCount = frameCnt;
+    (dynamic_pointer_cast<MixPass>(pipeline.getRenderpass(1)))->frameCount = frameCnt;
+    frameCnt++;
     pipeline.render();
 }
 
@@ -161,13 +165,24 @@ int main()
     }
     glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
     shader testShader("./Shaders/tvert.glsl", "./Shaders/tfrag.glsl");
-
+    shader mixShader("./Shaders/tvert.glsl", "./Shaders/mixFrag.glsl");
 
     //准备数据
     vector<triangle> triangles;
-    loadObj("./Models/Stanford Bunny.obj", triangles,
-            getTransformMatrix(vec3(0, 0, 0), vec3(0.3, -1.6, 0), vec3(1.5, 1.5, 1.5)),vec3(0.5,0.5,1));
-    loadObj("./Models/quad.obj",triangles,getTransformMatrix(vec3(0, 0, 0), vec3(0, -1.4, 0), vec3(18.83, 0.01, 18.83)),vec3(1,1,1));
+    material tmpMaterial;
+    tmpMaterial.diffuse = vec3(1, 1, 0);
+    tmpMaterial.emission = vec3(0);
+//    loadObj("./Models/Stanford Bunny.obj", triangles,
+//            getTransformMatrix(vec3(0, 0, 0), vec3(0.3, -1.6, 0), vec3(1.5, 1.5, 1.5)), tmpMaterial);
+//    tmpMaterial.diffuse = vec3(1, 1, 0.5);
+//    loadObj("./Models/quad.obj", triangles,
+//            getTransformMatrix(vec3(0, 0, 0), vec3(0, -1.4, 0), vec3(18.83, 0.01, 18.83)), tmpMaterial);
+//    tmpMaterial.emission = vec3(30, 20, 20) ;
+//    loadObj("./Models/sphere.obj", triangles,
+//            getTransformMatrix(vec3(0, 0, 0), vec3(0.0, 0.9, 0), vec3(1, 1, 1)),
+//            tmpMaterial);
+    loadObj("./Models/cornell_box.obj", triangles,
+            getTransformMatrix(vec3(180, 0, 180), vec3(1.5, -1.5, 1.5), vec3(3, 3, 3)));
     //建立BVH
     BVHNode testNode;
     testNode.left = 255;
@@ -179,8 +194,10 @@ int main()
     buildBVHwithSAH(triangles, nodes, 0, triangles.size() - 1, 8);
     vector<triangle_encoded> encode_triangles = encodeTriangles(triangles);
     vector<BVHNode_encoded> encode_bvh = encodeBVHNodes(nodes);
+    float lightArea;
+    vector<light_encoded> encode_lights = encodeLights(triangles, &lightArea);
     //开始绑定texture buffer
-    GLuint tbo0, tbo1, triangleTexBuffer, bvhTexBuffer;
+    GLuint tbo0, tbo1, tbo2, triangleTexBuffer, bvhTexBuffer, lightTexBuffer;
     //将三角形数据传入texture buffer
     glGenBuffers(1, &tbo0);
     glBindBuffer(GL_TEXTURE_BUFFER, tbo0);
@@ -196,15 +213,27 @@ int main()
     glGenTextures(1, &bvhTexBuffer);
     glBindTexture(GL_TEXTURE_BUFFER, bvhTexBuffer);
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo1);
+    //将光源数据传入texture buffer
+    glGenBuffers(1, &tbo2);
+    glBindBuffer(GL_TEXTURE_BUFFER, tbo2);
+    glBufferData(GL_TEXTURE_BUFFER, encode_lights.size() * sizeof(light_encoded), encode_lights.data(), GL_STATIC_DRAW);
+    glGenTextures(1, &lightTexBuffer);
+    glBindTexture(GL_TEXTURE_BUFFER, lightTexBuffer);
+    glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo2);
 
     //初始化渲染管线
-    pipeline.init(1024, 1024);
+    pipeline.init(512, 512);
     auto pass1 = make_shared<FirstPass>(pipeline.width, pipeline.height, testShader);
+    auto pass2 = make_shared<MixPass>(pipeline.width, pipeline.height, mixShader);
     pass1->nTriangle = encode_triangles.size();
     pass1->nBVHNode = nodes.size();
+    pass1->nLight = encode_lights.size();
+    pass1->lightArea = lightArea;
     pass1->bindTexes["triangles"] = triangleTexBuffer;
     pass1->bindTexes["bvh"] = bvhTexBuffer;
+    pass1->bindTexes["lights"] = lightTexBuffer;
     pipeline.addRenderPass(pass1);
+    pipeline.addRenderPass(pass2);
     //Render Loop
     while (!glfwWindowShouldClose(window))
     {

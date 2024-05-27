@@ -1,4 +1,5 @@
 #pragma  once
+
 #include "shader.h"
 
 shader::shader(const char *vPath, const char *fPath)
@@ -114,5 +115,10 @@ void shader::setMat4(const std::string &name, glm::mat4 mat) const
 void shader::unuse() const
 {
     glUseProgram(0);
+}
+
+void shader::setUInt(const std::string &name,unsigned int value) const
+{
+    glUniform1ui(glGetUniformLocation(ID, name.c_str()), (int) value);
 }
 

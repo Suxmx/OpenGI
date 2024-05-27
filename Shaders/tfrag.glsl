@@ -1,13 +1,38 @@
 #version 330 core
+#define PI 3.1415926
 #define INF 999999
 #define SIZE_TRIANGLE 8
 #define SIZE_BVH 4
 in vec3 pix;
-
+out vec4 color;
 uniform samplerBuffer triangles;
 uniform samplerBuffer bvh;
+uniform samplerBuffer lights;
 uniform int nTriangle;
 uniform int nNodes;
+uniform int width;
+uniform int height;
+uniform uint frameCount;
+uniform int nLight;
+//随机数种子
+uint seed = uint(
+    uint((pix.x * 0.5 + 0.5) * width) * uint(1973) +
+    uint((pix.y * 0.5 + 0.5) * height) * uint(9277) +
+    uint(frameCount) * uint(26699)) | uint(1);
+uint wang_hash(inout uint seed)
+{
+    seed = uint(seed ^ uint(61)) ^ uint(seed >> uint(16));
+    seed *= uint(9);
+    seed = seed ^ (seed >> 4);
+    seed *= uint(0x27d4eb2d);
+    seed = seed ^ (seed >> 15);
+    return seed;
+}
+//返回0-1均匀随机分布的数
+float rand()
+{
+    return float(wang_hash(seed)) / 4294967296.0;
+}
 struct Material
 {
     vec3 emissive;
@@ -87,13 +112,13 @@ Hit hitTriangle(Triangle tri, Ray ray)
     vec3 N = normalize(cross(tri.p2 - tri.p1, tri.p3 - tri.p1));
     float dotND = dot(N, ray.dir);
     // 光线从内部打到三角形
-    if (dotND > 0.0f)
+    if (dot(N, ray.dir) > 0.0f)
     {
         ret.isInside = true;
         N = -N;
     }
     // 视线和三角形平行
-    if (abs(dotND) < 0.00001f)
+    if (abs(dot(N, ray.dir)) < 0.00001f)
     {
         return ret;
     }
@@ -104,7 +129,7 @@ Hit hitTriangle(Triangle tri, Ray ray)
     vec3 s = ray.o - tri.p1;
     vec3 s1 = cross(ray.dir, e2);
     vec3 s2 = cross(s, e1);
-    mollerRet = 1 / dot(s1, e1) * vec3(dot(s2, e2), dot(s1, s), dot(s2, ray.dir));
+    mollerRet = 1.0 / dot(s1, e1) * vec3(dot(s2, e2), dot(s1, s), dot(s2, ray.dir));
     float t = mollerRet.x, b1 = mollerRet.y, b2 = mollerRet.z;
 
     if (t < 0.00001f || b1 < 0.0f || b2 < 0.0f || (b1 + b2) > 1.0f)
@@ -116,8 +141,9 @@ Hit hitTriangle(Triangle tri, Ray ray)
     ret.dist = t;
     ret.lightDir = ray.dir;
     ret.m = tri.m;
-    vec3 smoothNormal = (b1 * tri.n1 + b2 * tri.n2 + (1 - b1 - b2) * tri.n3);
-    ret.normal = !ret.isInside ? smoothNormal : -smoothNormal;
+    vec3 smoothNormal = normalize(b1 * tri.n1 + b2 * tri.n2 + (1 - b1 - b2) * tri.n3);
+//    ret.normal = !ret.isInside ? smoothNormal : -smoothNormal;
+    ret.normal=N;
     return ret;
 }
 // 取得[l,r]中最近的交点的结果
@@ -213,14 +239,69 @@ Hit hitBVH(Ray ray)
     }
     return ret;
 }
+// 半球均匀采样
+vec3 SampleHemisphereInZ()
+{
+    float z = rand();
+    float r = max(0, sqrt(1.0 - z * z));
+    float phi = 2.0 * PI * rand();
+    return vec3(r * cos(phi), r * sin(phi), z);
+}
+// 将向量 v 投影到 N 的法向半球
+vec3 toNormalHemisphere(vec3 v, vec3 N) {
+    vec3 helper = vec3(1, 0, 0);
+    if (abs(N.x) > 0.999) helper = vec3(0, 0, 1);
+    vec3 tangent = normalize(cross(N, helper));
+    vec3 bitangent = normalize(cross(N, tangent));
+    return v.x * tangent + v.y * bitangent + v.z * N;
+}
+vec3 SampleHemisphere(vec3 N)
+{
+    return toNormalHemisphere(SampleHemisphereInZ(), N);
+}
+//用循环模拟递归
+vec3 pathTracing(Hit hit, int maxBounce)
+{
+    vec3 Lo = vec3(0), bounceFactor = vec3(1);
+    for (int i = 1;i <= maxBounce; i++)
+    {
+        vec3 randomDir = SampleHemisphere(hit.normal);
+        Ray randomRay;
+        randomRay.o = hit.hitPoint;
+        randomRay.dir = randomDir;
+        Hit randomHit = hitBVH(randomRay);
+        float pdf = 1 / (2.0 * PI);
+        float cos_o = max(0, dot(-hit.lightDir, hit.normal));
+        float cos_i = max(0, dot(randomDir, hit.normal));
+        vec3 f_r = hit.m.baseColor / PI;//BRDF
+        if (!randomHit.isHit)
+        {
+//            Lo += bounceFactor * f_r * cos_i / pdf;
+            continue;
+        }
+
+        Lo += bounceFactor * randomHit.m.emissive * f_r * cos_i / pdf;
+
+        hit = randomHit;
+        bounceFactor *= f_r * cos_i / pdf;
+    }
+    return Lo;
+}
 
 void main()
 {
     Ray ray;
     ray.o = vec3(0, 0, 4);
     ray.dir = normalize(vec3(pix.xy, 2) - ray.o);
-    BVHNode root = getNode(1), left, right;
+    Hit firstHit = hitBVH(ray);
+    if (!firstHit.isHit)
+    {
+        color = vec4(0);
+    }
+    else
+    {
+        vec3 L = firstHit.m.emissive + pathTracing(firstHit, 80);
+        color = vec4(L, 1);
+    }
 
-    Hit hit = hitBVH(ray);
-    if (hit.isHit)gl_FragData[0] = vec4(hit.m.baseColor, 1);
 }

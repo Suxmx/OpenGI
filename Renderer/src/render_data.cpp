@@ -1,4 +1,5 @@
 #include "render_data.h"
+
 #define INF 9999999
 
 vector<triangle_encoded> encodeTriangles(vector<triangle> &triangles)
@@ -26,16 +27,49 @@ vector<triangle_encoded> encodeTriangles(vector<triangle> &triangles)
     return ets;
 }
 
+float calcTriangleArea(const glm::vec3 &p1, const glm::vec3 &p2, const glm::vec3 &p3)
+{
+    // 计算向量
+    glm::vec3 v1 = p2 - p1;
+    glm::vec3 v2 = p3 - p1;
+
+    // 计算叉乘
+    glm::vec3 crossProduct = glm::cross(v1, v2);
+
+    // 计算叉乘向量的长度
+    float area = glm::length(crossProduct) / 2.0f;
+
+    return area;
+}
+
+vector<light_encoded> encodeLights(vector<triangle> &triangles,float* totalArea)
+{
+    vector<light_encoded> els;
+    *totalArea=0;
+    for (const auto &t: triangles)
+    {
+        if (length(t.material.emission) > 0)
+        {
+            light_encoded el{.p1=t.p1, .p2=t.p2, .p3=t.p3, .n1=t.n1, .n2=t.n2, .n3=t.n3};
+            el.emissive = t.material.emission;
+            el.area.x = calcTriangleArea(t.p1, t.p2, t.p3);
+            (*totalArea)+=el.area.x;
+            els.emplace_back(el);
+        }
+    }
+    return els;
+}
+
 vector<BVHNode_encoded> encodeBVHNodes(vector<BVHNode> &bvhs)
 {
     vector<BVHNode_encoded> ebs;
-    for(const auto& node:bvhs)
+    for (const auto &node: bvhs)
     {
         BVHNode_encoded eb{};
-        eb.AA=node.AA;
-        eb.BB=node.BB;
-        eb.childs=vec3(node.left,node.right,0);
-        eb.leafInfo=vec3(node.n,node.index,0);
+        eb.AA = node.AA;
+        eb.BB = node.BB;
+        eb.childs = vec3(node.left, node.right, 0);
+        eb.leafInfo = vec3(node.n, node.index, 0);
         ebs.emplace_back(eb);
     }
     return ebs;

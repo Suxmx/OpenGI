@@ -4,7 +4,7 @@ void RenderPass::begin() const
 {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, width, height);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT );
     glUseProgram(shaderProgram);
     int cnt = 0;
 
@@ -49,11 +49,11 @@ void RenderPass::setupFramebuffer()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTexture, 0);
 
-    GLuint rbo;
-    glGenRenderbuffers(1, &rbo);
-    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+//    GLuint rbo;
+//    glGenRenderbuffers(1, &rbo);
+//    glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+//    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+//    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cerr << "Framebuffer not complete!" << std::endl;
@@ -95,10 +95,43 @@ shader *RenderPass::getShader()
 
 void FirstPass::draw()
 {
-    passShader.setInt("nTriangle",nTriangle);
-    passShader.setInt("nNodes",nBVHNode);
+    passShader.setInt("width", width);
+    passShader.setInt("height", height);
+    passShader.setUInt("frameCount", frameCount);
+    passShader.setInt("nTriangle", nTriangle);
+    passShader.setInt("nNodes", nBVHNode);
+    passShader.setInt("nLight",nLight);
+    passShader.setFloat("lightArea",lightArea);
     RenderPass::draw();
 }
 
 FirstPass::FirstPass(int width, int height, const shader &s) : RenderPass(width, height, s)
 {}
+
+MixPass::MixPass(int width, int height, const shader &s) : RenderPass(width, height, s)
+{
+
+}
+
+void MixPass::begin() const
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glViewport(0, 0, width, height);
+    glUseProgram(shaderProgram);
+    glActiveTexture(GL_TEXTURE0 + 1);
+    glBindTexture(GL_TEXTURE_2D, getColorTexture());
+    glUniform1i(glGetUniformLocation(shaderProgram, "framebuffer"), 1);
+    int cnt = 2;
+    for (const auto &pair: bindTexes)
+    {
+        glActiveTexture(GL_TEXTURE0 + cnt);
+        glBindTexture(GL_TEXTURE_BUFFER, pair.second);
+        glUniform1i(glGetUniformLocation(shaderProgram, pair.first.c_str()), cnt++);
+    }
+}
+
+void MixPass::draw()
+{
+    passShader.setInt("frameCount", frameCount);
+    RenderPass::draw();
+}
