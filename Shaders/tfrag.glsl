@@ -300,7 +300,7 @@ void main()
     }
     else
     {
-        vec3 L = firstHit.m.emissive + pathTracing(firstHit, 80);
+        vec3 L = firstHit.m.emissive + pathTracing(firstHit, 10);
         color = vec4(L, 1);
     }
 
