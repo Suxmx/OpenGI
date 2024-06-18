@@ -223,7 +223,7 @@ int main()
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo2);
 
     //初始化渲染管线
-    pipeline.init(1024, 1024);
+    pipeline.init(600, 600);
     auto pass1 = make_shared<FirstPass>(pipeline.width, pipeline.height, testShader);
     auto pass2 = make_shared<MixPass>(pipeline.width, pipeline.height, mixShader);
     auto pass3 = make_shared<ToneMappingPass>(pipeline.width, pipeline.height,toneMappingShader);

@@ -13,7 +13,15 @@ add_custom_target(CopyShaders ALL
         "${CMAKE_SOURCE_DIR}/Shaders"
         "${CMAKE_BINARY_DIR}/Renderer/Shaders"
         COMMENT "Copying shaders to build directory")
+add_custom_target(CopyModels ALL
+        COMMAND ${CMAKE_COMMAND} -E remove_directory
+        "${CMAKE_BINARY_DIR}/Renderer/Models"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/Models"
+        "${CMAKE_BINARY_DIR}/Renderer/Models"
+        COMMENT "Copying models to build directory")
 
 add_executable(OpenGI Renderer.cpp ${GLAD_SRC} ${IMGUI_SRC} ${RENDERER_SRC})
 
 add_dependencies(${CMAKE_PROJECT_NAME} CopyShaders)
+add_dependencies(${CMAKE_PROJECT_NAME} CopyModels)
