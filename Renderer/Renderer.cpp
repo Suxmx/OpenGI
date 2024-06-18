@@ -166,6 +166,7 @@ int main()
     glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
     shader testShader("./Shaders/tvert.glsl", "./Shaders/tfrag.glsl");
     shader mixShader("./Shaders/tvert.glsl", "./Shaders/mixFrag.glsl");
+    shader toneMappingShader("./Shaders/tvert.glsl","./Shaders/toneMappingFrag.glsl");
 
     //准备数据
     vector<triangle> triangles;
@@ -222,9 +223,10 @@ int main()
     glTexBuffer(GL_TEXTURE_BUFFER, GL_RGB32F, tbo2);
 
     //初始化渲染管线
-    pipeline.init(512, 512);
+    pipeline.init(1024, 1024);
     auto pass1 = make_shared<FirstPass>(pipeline.width, pipeline.height, testShader);
     auto pass2 = make_shared<MixPass>(pipeline.width, pipeline.height, mixShader);
+    auto pass3 = make_shared<ToneMappingPass>(pipeline.width, pipeline.height,toneMappingShader);
     pass1->nTriangle = encode_triangles.size();
     pass1->nBVHNode = nodes.size();
     pass1->nLight = encode_lights.size();
@@ -234,6 +236,7 @@ int main()
     pass1->bindTexes["lights"] = lightTexBuffer;
     pipeline.addRenderPass(pass1);
     pipeline.addRenderPass(pass2);
+//    pipeline.addRenderPass(pass3);
     //Render Loop
     while (!glfwWindowShouldClose(window))
     {

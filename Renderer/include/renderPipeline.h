@@ -27,6 +27,5 @@ private:
 
     std::vector<shared_ptr<RenderPass>> passes;
 
-
     GLuint vao = 0, vbo = 0,triangleTexBuffer;
 };

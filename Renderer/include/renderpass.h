@@ -66,3 +66,8 @@ public:
     void begin() const override;
     void draw() override;
 };
+class ToneMappingPass : public RenderPass
+{
+public:
+    ToneMappingPass(int width, int height, const shader &s);
+};

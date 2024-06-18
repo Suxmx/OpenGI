@@ -3,6 +3,7 @@
 #define INF 999999
 #define SIZE_TRIANGLE 8
 #define SIZE_BVH 4
+#define SIZE_LIGHT 8
 in vec3 pix;
 out vec4 color;
 uniform samplerBuffer triangles;
@@ -14,6 +15,7 @@ uniform int width;
 uniform int height;
 uniform uint frameCount;
 uniform int nLight;
+uniform float lightArea;
 //随机数种子
 uint seed = uint(
     uint((pix.x * 0.5 + 0.5) * width) * uint(1973) +
@@ -65,6 +67,13 @@ struct Hit
     vec3 lightDir;//击中该点的光线的方向
     Material m;//命中点的材质
 };
+struct Light
+{
+    vec3 p1, p2, p3;
+    vec3 n1, n2, n3;
+    vec3 emissive;
+    float area;
+};
 
 // 从texture buffer中解析出三角形
 Triangle getTriangle(int i)
@@ -101,6 +110,25 @@ BVHNode getNode(int i)
     node.maxPoint = texelFetch(bvh, offset + 3).xyz;
 
     return node;
+}
+Light getLight(int i)
+{
+    Light light;
+    int offset = i * SIZE_LIGHT;
+    //vertex
+    light.p1 = texelFetch(lights, offset + 0).xyz;
+    light.p2 = texelFetch(lights, offset + 1).xyz;
+    light.p3 = texelFetch(lights, offset + 2).xyz;
+    //normal
+    light.n1 = texelFetch(lights, offset + 3).xyz;
+    light.n2 = texelFetch(lights, offset + 4).xyz;
+    light.n3 = texelFetch(lights, offset + 5).xyz;
+    //emissive
+    light.emissive = texelFetch(lights, offset + 6).xyz;
+    //area
+    light.area = texelFetch(lights, offset + 7).x;
+
+    return light;
 }
 //功能部分
 Hit hitTriangle(Triangle tri, Ray ray)
@@ -142,8 +170,8 @@ Hit hitTriangle(Triangle tri, Ray ray)
     ret.lightDir = ray.dir;
     ret.m = tri.m;
     vec3 smoothNormal = normalize(b1 * tri.n1 + b2 * tri.n2 + (1 - b1 - b2) * tri.n3);
-//    ret.normal = !ret.isInside ? smoothNormal : -smoothNormal;
-    ret.normal=N;
+    //    ret.normal = !ret.isInside ? smoothNormal : -smoothNormal;
+    ret.normal = N;
     return ret;
 }
 // 取得[l,r]中最近的交点的结果
@@ -262,9 +290,15 @@ vec3 SampleHemisphere(vec3 N)
 //用循环模拟递归
 vec3 pathTracing(Hit hit, int maxBounce)
 {
+    int bounce = 0;
     vec3 Lo = vec3(0), bounceFactor = vec3(1);
+    vec3 dir_ls[15], indir_ls[15];
     for (int i = 1;i <= maxBounce; i++)
     {
+
+        // sample objects
+        dir_ls[i] = vec3(0);
+        indir_ls[i] = vec3(0);
         vec3 randomDir = SampleHemisphere(hit.normal);
         Ray randomRay;
         randomRay.o = hit.hitPoint;
@@ -276,16 +310,56 @@ vec3 pathTracing(Hit hit, int maxBounce)
         vec3 f_r = hit.m.baseColor / PI;//BRDF
         if (!randomHit.isHit)
         {
-//            Lo += bounceFactor * f_r * cos_i / pdf;
-            continue;
+            //bounce++;
+            break;
         }
+        if (length(randomHit.m.emissive) > 0)
+        {
+            //bounce++;
+            break;
+        }
+        indir_ls[i] = f_r * cos_i / pdf;
 
-        Lo += bounceFactor * randomHit.m.emissive * f_r * cos_i / pdf;
+        // sample lights
+        float randLightArea = lightArea * rand(), sumLightArea = 0;
+        Hit hitLight;
+        vec3 sampleLightPoint;
+        float lightPdf = 1e-3;
+        for (int li = 0;li < nLight; li++)
+        {
+            Light light = getLight(li);
+            sumLightArea += light.area;
+            if (sumLightArea >= randLightArea)
+            {
+                Ray rayToLight;
+                rayToLight.o = hit.hitPoint;
+                float u = rand(), v = rand();
+                sampleLightPoint = u * light.p1 + v * light.p2 + (1 - u - v) * light.p3;
+                rayToLight.dir = normalize(sampleLightPoint - hit.hitPoint);
+                hitLight = hitBVH(rayToLight);
+                lightPdf = 1.f / light.area;
 
+                break;
+            }
+        }
+        if (hitLight.isHit && length((hitLight.hitPoint - sampleLightPoint)) < 5e-3)
+        {
+            float pow2lightDist = dot((hitLight.hitPoint - hit.hitPoint), (hitLight.hitPoint - hit.hitPoint));
+            pow2lightDist *= pow2lightDist;
+            vec3 light_f_r = hit.m.baseColor / PI;
+            float l_cos_i = max(0, dot(hitLight.lightDir, hit.normal));
+            float l_cos_o = max(0, dot(-hitLight.lightDir, hitLight.normal));
+            dir_ls[i] =  hitLight.m.emissive * light_f_r * l_cos_o / pow2lightDist / lightPdf;
+        }
         hit = randomHit;
-        bounceFactor *= f_r * cos_i / pdf;
+        bounce++;
     }
-    return Lo;
+    indir_ls[bounce] = dir_ls[bounce];
+    for (int i = bounce - 1;i >= 1; i--)
+    {
+        indir_ls[i] = indir_ls[i] * indir_ls[i + 1] + dir_ls[i];
+    }
+    return indir_ls[1];
 }
 
 void main()
@@ -300,7 +374,7 @@ void main()
     }
     else
     {
-        vec3 L = firstHit.m.emissive + pathTracing(firstHit, 10);
+        vec3 L = firstHit.m.emissive + pathTracing(firstHit, 4);
         color = vec4(L, 1);
     }
 

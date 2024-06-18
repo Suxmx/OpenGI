@@ -4,7 +4,7 @@ void RenderPass::begin() const
 {
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     glViewport(0, 0, width, height);
-    glClear(GL_COLOR_BUFFER_BIT );
+    glClear(GL_COLOR_BUFFER_BIT);
     glUseProgram(shaderProgram);
     int cnt = 0;
 
@@ -100,8 +100,8 @@ void FirstPass::draw()
     passShader.setUInt("frameCount", frameCount);
     passShader.setInt("nTriangle", nTriangle);
     passShader.setInt("nNodes", nBVHNode);
-    passShader.setInt("nLight",nLight);
-    passShader.setFloat("lightArea",lightArea);
+    passShader.setInt("nLight", nLight);
+    passShader.setFloat("lightArea", lightArea);
     RenderPass::draw();
 }
 
@@ -134,4 +134,9 @@ void MixPass::draw()
 {
     passShader.setInt("frameCount", frameCount);
     RenderPass::draw();
+}
+
+ToneMappingPass::ToneMappingPass(int width, int height, const shader &s) : RenderPass(width, height, s)
+{
+
 }
